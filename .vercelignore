@@ -1,0 +1,14 @@
+# Artefatos e credenciais locais
+node_modules
+**/node_modules
+.vercel
+.data
+logs
+anexos
+*.log
+.env*
+
+# Aplicacoes legadas preservadas, mas fora da implantacao SaaS
+bot
+chat-panel
+vercel-panel

@@ -1,6 +1,5 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
 import { Router, type Request } from 'express';
-import argon2 from 'argon2';
 import { loginSchema, registerTenantSchema, roleSchema } from '@autoflow/contracts';
 import { connect, query, transaction } from '@autoflow/database';
 import { hashApiKey } from '@autoflow/security';
@@ -19,6 +18,31 @@ const acceptInvitationSchema = z.object({
   password: z.string().min(10).max(128),
   acceptedTermsVersion: z.string().min(1),
 });
+function derivePasswordKey(password: string, salt: Buffer, length: number, options: { N: number; r: number; p: number; maxmem: number }): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    scryptCallback(password, salt, length, options, (error, derivedKey) => {
+      if (error) reject(error);
+      else resolve(derivedKey);
+    });
+  });
+}
+
+async function hashPassword(password: string): Promise<string> {
+  const salt = randomBytes(16);
+  const key = await derivePasswordKey(password, salt, 64, { N: 16_384, r: 8, p: 1, maxmem: 32 * 1024 * 1024 });
+  return `scrypt$16384$8$1$${salt.toString('base64url')}$${key.toString('base64url')}`;
+}
+
+async function verifyPassword(encoded: string, password: string): Promise<boolean> {
+  const [algorithm, n, r, p, saltValue, keyValue] = encoded.split('$');
+  if (algorithm !== 'scrypt' || !n || !r || !p || !saltValue || !keyValue) return false;
+  const salt = Buffer.from(saltValue, 'base64url');
+  const expected = Buffer.from(keyValue, 'base64url');
+  const key = await derivePasswordKey(password, salt, expected.length, {
+    N: Number(n), r: Number(r), p: Number(p), maxmem: 32 * 1024 * 1024,
+  });
+  return key.length === expected.length && timingSafeEqual(key, expected);
+}
 
 function slugify(value: string): string {
   const base = value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -51,7 +75,7 @@ async function issueSession(identity: SessionIdentity, req: Request): Promise<{ 
 router.post('/register', async (req, res, next) => {
   try {
     const input = registerTenantSchema.parse(req.body);
-    const passwordHash = await argon2.hash(input.password, { type: argon2.argon2id });
+    const passwordHash = await hashPassword(input.password);
     const identity = await transaction<SessionIdentity>(async (client) => {
       const existing = await client.query('SELECT id FROM users WHERE email = $1', [input.email.toLowerCase()]);
       if (existing.rows[0]) throw new AppError('EMAIL_IN_USE', 'Email ja cadastrado.', 409);
@@ -118,7 +142,7 @@ router.post('/login', async (req, res, next) => {
        LIMIT 2`,
       [input.email.toLowerCase(), input.tenantSlug ?? null],
     );
-    if (!rows[0] || !(await argon2.verify(rows[0].password_hash, input.password))) {
+    if (!rows[0] || !(await verifyPassword(rows[0].password_hash, input.password))) {
       throw new AppError('INVALID_CREDENTIALS', 'Email ou senha incorretos.', 401);
     }
     if (!input.tenantSlug && rows.length > 1) {
@@ -151,13 +175,13 @@ router.post('/accept-invitation', async (req, res, next) => {
       let userId: string;
       let email: string;
       if (existing.rows[0]) {
-        if (existing.rows[0].status !== 'ACTIVE' || !(await argon2.verify(existing.rows[0].password_hash, input.password))) {
+        if (existing.rows[0].status !== 'ACTIVE' || !(await verifyPassword(existing.rows[0].password_hash, input.password))) {
           throw new AppError('INVALID_CREDENTIALS', 'Senha da conta existente incorreta.', 401);
         }
         userId = existing.rows[0].id;
         email = existing.rows[0].email;
       } else {
-        const passwordHash = await argon2.hash(input.password, { type: argon2.argon2id });
+        const passwordHash = await hashPassword(input.password);
         const created = await client.query<{ id: string; email: string }>(
           `INSERT INTO users (name, email, password_hash, status)
            VALUES ($1, $2, $3, 'ACTIVE') RETURNING id, email`,

@@ -5,6 +5,12 @@
   "type": "module",
   "main": "dist/server.js",
   "types": "dist/server.d.ts",
+  "exports": {
+    "./app": {
+      "types": "./dist/app.d.ts",
+      "import": "./dist/app.js"
+    }
+  },
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
@@ -21,7 +27,6 @@
     "@autoflow/queue": "workspace:*",
     "@autoflow/security": "workspace:*",
     "@autoflow/shared": "workspace:*",
-    "argon2": "^0.44.0",
     "cors": "^2.8.5",
     "express": "^4.22.1",
     "express-rate-limit": "^8.2.1",

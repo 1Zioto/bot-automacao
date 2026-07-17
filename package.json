@@ -2,6 +2,7 @@
   "name": "autoflow-saas",
   "version": "2.0.0",
   "private": true,
+  "type": "module",
   "packageManager": "pnpm@11.9.0",
   "engines": {
     "node": ">=20 <25"
@@ -10,6 +11,7 @@
     "build": "pnpm -r --if-present build",
     "check": "pnpm -r --if-present check",
     "test": "pnpm -r --if-present test",
+    "vercel:build": "pnpm build && esbuild apps/api/src/app.ts --bundle --platform=node --format=cjs --target=node24 --outfile=api/bundle.cjs",
     "db:migrate": "pnpm --filter @autoflow/database migrate",
     "dev:api": "pnpm --filter @autoflow/api dev",
     "dev:web": "pnpm --filter @autoflow/web dev",
@@ -18,9 +20,13 @@
     "runtime:sync": "node scripts/sync-runtime-config.mjs",
     "motor:start": "pnpm build && concurrently --kill-others-on-fail --names queue,whatsapp --prefix-colors cyan,magenta \"node --env-file=.env.motor.local apps/queue-worker/dist/index.js\" \"node --env-file=.env.motor.local apps/whatsapp-worker/dist/index.js\""
   },
+  "dependencies": {
+    "@autoflow/api": "workspace:*"
+  },
   "devDependencies": {
     "@types/node": "^24.3.0",
     "concurrently": "^9.2.1",
+    "esbuild": "^0.25.10",
     "typescript": "~5.9.2"
   }
 }
