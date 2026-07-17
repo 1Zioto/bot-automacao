@@ -6,6 +6,9 @@ import { resolve } from 'node:path';
 const root = resolve(import.meta.dirname, '..');
 const localRuntimePath = resolve(root, '.env.motor.local');
 const legacyEnvironmentPath = resolve(root, 'bot', '.env');
+const importedEnvironmentPath = process.env.RUNTIME_IMPORT_ENV
+  ? resolve(root, process.env.RUNTIME_IMPORT_ENV)
+  : undefined;
 
 function parseEnvironment(contents) {
   const result = new Map();
@@ -47,13 +50,14 @@ function updateVercel(name, value, environment) {
 
 const existing = await readEnvironment(localRuntimePath);
 const legacy = await readEnvironment(legacyEnvironmentPath);
+const imported = importedEnvironmentPath ? await readEnvironment(importedEnvironmentPath) : new Map();
 const databaseUrl = existing.get('DATABASE_URL') || legacy.get('DATABASE_URL');
 if (!databaseUrl?.startsWith('postgres')) throw new Error('DATABASE_URL da Neon nao encontrada.');
 
 const accessTokenSecret = existing.get('ACCESS_TOKEN_SECRET') || randomSecret(48);
 const refreshTokenSecret = existing.get('REFRESH_TOKEN_SECRET') || randomSecret(48);
 const encryptionKey = existing.get('ENCRYPTION_KEY') || randomSecret(32);
-const redisUrl = existing.get('REDIS_URL') || '';
+const redisUrl = imported.get('REDIS_URL') || existing.get('REDIS_URL') || '';
 
 for (const environment of ['production', 'preview']) {
   updateVercel('ACCESS_TOKEN_SECRET', accessTokenSecret, environment);
