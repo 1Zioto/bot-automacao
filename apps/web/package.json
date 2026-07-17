@@ -1,0 +1,14 @@
+{
+  "name": "@autoflow/web",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "check": "vite build --emptyOutDir=false"
+  },
+  "devDependencies": {
+    "vite": "^7.1.3"
+  }
+}

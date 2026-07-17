@@ -1,4 +1,4 @@
-// Reescreve uma mensagem mantendo o sentido (anti-bloqueio). Chave em process.env.OPENAI_API_KEY.
+// Assistente opcional de redacao. Nao e usado automaticamente pelo motor de envios.
 async function variarMensagem(texto, opcoes) {
     opcoes = opcoes || {};
     const apiKey = process.env.OPENAI_API_KEY;

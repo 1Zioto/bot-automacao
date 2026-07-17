@@ -171,15 +171,16 @@ export class InstanceManager {
     );
     const contactId = contactRows[0]!.id;
     const encrypted = encryptText(message.body ?? '');
-    await query(
+    const insertedMessages = await query<{ id: string }>(
       `INSERT INTO messages
          (tenant_id, instance_id, contact_id, direction, type, status, external_message_id,
           content_ciphertext, content_iv, content_tag, received_at)
        VALUES ($1, $2, $3, 'INBOUND', 'TEXT', 'RECEIVED', $4, $5, $6, $7, now())
-       ON CONFLICT (instance_id, external_message_id) DO NOTHING`,
+       ON CONFLICT (instance_id, external_message_id) DO NOTHING
+       RETURNING id`,
       [row.tenant_id, row.id, contactId, message.id._serialized, encrypted.ciphertext, encrypted.iv, encrypted.tag],
     );
-    await emitSafely(row.tenant_id, 'message.received', { instanceId: row.id, contactId, messageId: message.id._serialized });
+    if (insertedMessages[0]) await emitSafely(row.tenant_id, 'message.received', { instanceId: row.id, contactId, messageId: insertedMessages[0].id });
     if (optOutPattern.test(message.body.trim())) {
       await query(
         `UPDATE contacts SET consent_status = 'REVOKED', opted_out_at = now(), updated_at = now()

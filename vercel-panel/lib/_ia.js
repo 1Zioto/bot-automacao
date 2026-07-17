@@ -1,4 +1,4 @@
-// Reescreve uma mensagem mantendo o sentido, mudando palavras/estrutura (anti-bloqueio).
+// Assistente opcional de redacao. Nao e usado automaticamente pelo motor de envios.
 // Usa a OpenAI. A chave vem de process.env.OPENAI_API_KEY (nunca no codigo).
 async function variarMensagem(texto, opcoes) {
     opcoes = opcoes || {};

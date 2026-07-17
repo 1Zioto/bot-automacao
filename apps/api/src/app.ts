@@ -10,12 +10,15 @@ import { query } from '@autoflow/database';
 import { createLogger } from '@autoflow/logger';
 import { AppError } from '@autoflow/shared';
 import { authRouter } from './routes/auth.js';
+import { adminRouter } from './routes/admin.js';
 import { apiKeysRouter } from './routes/api-keys.js';
+import { billingRouter, catalogRouter } from './routes/billing.js';
 import { campaignsRouter } from './routes/campaigns.js';
 import { contactsRouter } from './routes/contacts.js';
 import { instancesRouter } from './routes/instances.js';
 import { listsRouter } from './routes/lists.js';
 import { messagesRouter } from './routes/messages.js';
+import { teamRouter } from './routes/team.js';
 import { webhooksRouter } from './routes/webhooks.js';
 import type { RequestContextRequest } from './types.js';
 
@@ -50,10 +53,14 @@ export function createApp(): Express {
   });
 
   app.use('/api/v1/auth', authRouter);
+  app.use('/api/v1/admin', adminRouter);
+  app.use('/api/v1/plans', catalogRouter);
+  app.use('/api/v1/billing', billingRouter);
   app.use('/api/v1/instances', instancesRouter);
   app.use('/api/v1/contacts', contactsRouter);
   app.use('/api/v1/lists', listsRouter);
   app.use('/api/v1/messages', messagesRouter);
+  app.use('/api/v1/team', teamRouter);
   app.use('/api/v1/campaigns', campaignsRouter);
   app.use('/api/v1/api-keys', apiKeysRouter);
   app.use('/api/v1/webhooks', webhooksRouter);

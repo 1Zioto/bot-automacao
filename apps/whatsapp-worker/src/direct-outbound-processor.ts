@@ -91,6 +91,8 @@ export function createDirectOutboundProcessor(manager: InstanceManager) {
       usageDate = localDateKey(new Date(), message.timezone);
       const usage = await reserveDailyUsage(message.instance_id, usageDate, message.daily_limit);
       if (!usage.allowed) {
+        const firstNotice = await getRedis().set(`usage:limit-event:${message.instance_id}:${usageDate}`, '1', 'PX', 172_800_000, 'NX');
+        if (firstNotice) await emitWebhookEvent(message.tenant_id, 'usage.daily_limit_reached', { instanceId: message.instance_id, date: usageDate, limit: message.daily_limit }).catch(() => undefined);
         if (!token) throw new AppError('MISSING_JOB_TOKEN', 'Token do job ausente.', 500);
         await job.moveToDelayed(Date.now() + 15 * 60_000, token);
         throw new DelayedError();

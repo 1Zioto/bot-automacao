@@ -1,0 +1,18 @@
+.auth-links {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.auth-card .link {
+  padding: 0;
+  background: none;
+  color: #0b8f72;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.auth-card > input[type="hidden"] {
+  display: none;
+}

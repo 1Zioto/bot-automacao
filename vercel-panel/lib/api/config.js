@@ -9,7 +9,13 @@ async function obterConfig(usuarioId) {
         await query('INSERT INTO configuracoes (usuario_id) VALUES ($1) ON CONFLICT DO NOTHING', [usuarioId]);
         r = await query(`SELECT ${cols} FROM configuracoes WHERE usuario_id = $1`, [usuarioId]);
     }
-    return r.rows[0];
+    const config = r.rows[0] || {};
+    return {
+        ...config,
+        limite_diario: Number(config.limite_diario) > 0 ? Number(config.limite_diario) : 400,
+        ia_variar: false,
+        aquecimento: true,
+    };
 }
 
 module.exports = async (req, res) => {
@@ -40,20 +46,15 @@ module.exports = async (req, res) => {
             const b = await lerBody(req);
             let intervalo = Number(b.intervalo_segundos);
             let limite = Number(b.limite_diario);
-            const iaVariar = !!b.ia_variar;
-            const aquecimento = b.aquecimento !== undefined ? !!b.aquecimento : true;
+            const iaVariar = false;
+            const aquecimento = true;
             let ini = Number(b.janela_inicio);
             let fim = Number(b.janela_fim);
             if (!Number.isFinite(intervalo) || intervalo < 15) intervalo = 15; // minimo de seguranca
             if (intervalo > 3600) intervalo = 3600;
-            if (!Number.isFinite(limite) || limite < 0) limite = 0;
+            if (!Number.isFinite(limite) || limite < 1) limite = 400;
             if (!Number.isFinite(ini) || ini < 0 || ini > 23) ini = 8;
             if (!Number.isFinite(fim) || fim < 1 || fim > 24) fim = 20;
-            if (!aquecimento) {
-                limite = 0;
-                ini = 0;
-                fim = 24;
-            }
             await query(
                 `INSERT INTO configuracoes (usuario_id, intervalo_segundos, limite_diario, ia_variar, janela_inicio, janela_fim, aquecimento, atualizado_em)
                  VALUES ($1, $2, $3, $4, $5, $6, $7, now())

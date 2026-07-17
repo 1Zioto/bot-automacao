@@ -130,6 +130,8 @@ export function createOutboundProcessor(manager: InstanceManager) {
       const usage = await reserveDailyUsage(recipient.instance_id, usageDate, recipient.daily_limit);
       if (!usage.allowed) {
         await query("UPDATE campaign_recipients SET status = 'DEFERRED', failure_code = 'DAILY_LIMIT', updated_at = now() WHERE id = $1", [recipient.id]);
+        const firstNotice = await getRedis().set(`usage:limit-event:${recipient.instance_id}:${usageDate}`, '1', 'PX', 172_800_000, 'NX');
+        if (firstNotice) await emitWebhookEvent(recipient.tenant_id, 'usage.daily_limit_reached', { instanceId: recipient.instance_id, date: usageDate, limit: recipient.daily_limit }).catch(() => undefined);
         if (!token) throw new AppError('MISSING_JOB_TOKEN', 'Token do job ausente.', 500);
         await job.moveToDelayed(Date.now() + 15 * 60_000, token);
         throw new DelayedError();

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { getPool, query } from '@autoflow/database';
 import { createQueue, queueNames, type DirectOutboundMessageJob } from '@autoflow/queue';
@@ -16,9 +17,16 @@ const sendSchema = z.object({
   idempotencyKey: z.string().trim().min(8).max(160).optional(),
 });
 const directQueue = createQueue<DirectOutboundMessageJob>(queueNames.directOutboundMessages);
+const apiKeyRateLimit = rateLimit({
+  windowMs: 60_000,
+  limit: 60,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  keyGenerator: (req) => (req as ApiKeyRequest).apiAuth.apiKeyId,
+});
 const router: Router = Router();
 
-router.post('/', authenticateApiKey('messages:write'), async (req, res, next) => {
+router.post('/', authenticateApiKey('messages:write'), apiKeyRateLimit, async (req, res, next) => {
   try {
     const input = sendSchema.parse(req.body);
     const auth = (req as ApiKeyRequest).apiAuth;
@@ -82,7 +90,7 @@ router.post('/', authenticateApiKey('messages:write'), async (req, res, next) =>
   }
 });
 
-router.get('/:id', authenticateApiKey('messages:read'), async (req, res, next) => {
+router.get('/:id', authenticateApiKey('messages:read'), apiKeyRateLimit, async (req, res, next) => {
   try {
     const auth = (req as unknown as ApiKeyRequest).apiAuth;
     const rows = await query(

@@ -3,6 +3,7 @@ import { Router, type Request } from 'express';
 import argon2 from 'argon2';
 import { loginSchema, registerTenantSchema, roleSchema } from '@autoflow/contracts';
 import { getPool, query, transaction } from '@autoflow/database';
+import { hashApiKey } from '@autoflow/security';
 import { AppError } from '@autoflow/shared';
 import { z } from 'zod';
 import type { AuthenticatedRequest } from '../types.js';
@@ -12,6 +13,12 @@ import { createAccessToken, createRefreshToken, hashRefreshToken } from '../auth
 const router: Router = Router();
 const refreshSchema = z.object({ refreshToken: z.string().min(20) });
 const loginWithTenantSchema = loginSchema.extend({ tenantSlug: z.string().optional() });
+const acceptInvitationSchema = z.object({
+  token: z.string().startsWith('invite_'),
+  name: z.string().trim().min(2).max(160),
+  password: z.string().min(10).max(128),
+  acceptedTermsVersion: z.string().min(1),
+});
 
 function slugify(value: string): string {
   const base = value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -120,6 +127,67 @@ router.post('/login', async (req, res, next) => {
     await query('UPDATE users SET last_login_at = now() WHERE id = $1', [rows[0].userId]);
     const session = await issueSession(rows[0], req);
     res.json({ ...session, user: { id: rows[0].userId, email: rows[0].email }, tenant: { id: rows[0].tenantId } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/accept-invitation', async (req, res, next) => {
+  try {
+    const input = acceptInvitationSchema.parse(req.body);
+    const identity = await transaction<SessionIdentity>(async (client) => {
+      const invitation = await client.query<{ id: string; tenant_id: string; email: string; role: string }>(
+        `SELECT id, tenant_id, email, role FROM membership_invitations
+         WHERE token_hash = $1 AND status = 'PENDING' AND expires_at > now()
+         FOR UPDATE`,
+        [hashApiKey(input.token)],
+      );
+      const invite = invitation.rows[0];
+      if (!invite) throw new AppError('INVALID_INVITATION', 'Convite invalido, expirado ou ja utilizado.', 410);
+      const existing = await client.query<{ id: string; email: string; password_hash: string; status: string }>(
+        'SELECT id, email, password_hash, status FROM users WHERE email = $1',
+        [invite.email],
+      );
+      let userId: string;
+      let email: string;
+      if (existing.rows[0]) {
+        if (existing.rows[0].status !== 'ACTIVE' || !(await argon2.verify(existing.rows[0].password_hash, input.password))) {
+          throw new AppError('INVALID_CREDENTIALS', 'Senha da conta existente incorreta.', 401);
+        }
+        userId = existing.rows[0].id;
+        email = existing.rows[0].email;
+      } else {
+        const passwordHash = await argon2.hash(input.password, { type: argon2.argon2id });
+        const created = await client.query<{ id: string; email: string }>(
+          `INSERT INTO users (name, email, password_hash, status)
+           VALUES ($1, $2, $3, 'ACTIVE') RETURNING id, email`,
+          [input.name, invite.email, passwordHash],
+        );
+        userId = created.rows[0]!.id;
+        email = created.rows[0]!.email;
+      }
+      const membership = await client.query<{ id: string; role: string }>(
+        `INSERT INTO memberships (tenant_id, user_id, role, status, invited_at, accepted_at)
+         VALUES ($1, $2, $3, 'ACTIVE', now(), now())
+         ON CONFLICT (tenant_id, user_id) DO UPDATE
+           SET role = EXCLUDED.role, status = 'ACTIVE', accepted_at = now(), updated_at = now()
+           WHERE memberships.status = 'REMOVED'
+         RETURNING id, role`,
+        [invite.tenant_id, userId, invite.role],
+      );
+      if (!membership.rows[0]) throw new AppError('ALREADY_MEMBER', 'Esta conta ja pertence a empresa.', 409);
+      const terms = await client.query('SELECT version FROM terms_versions WHERE version = $1 AND is_active = true', [input.acceptedTermsVersion]);
+      if (!terms.rows[0]) throw new AppError('TERMS_NOT_FOUND', 'Versao dos termos nao encontrada.', 400);
+      await client.query(
+        `INSERT INTO terms_acceptances (tenant_id, user_id, terms_version, ip_address, user_agent)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [invite.tenant_id, userId, input.acceptedTermsVersion, req.ip, req.headers['user-agent'] ?? null],
+      );
+      await client.query("UPDATE membership_invitations SET status = 'ACCEPTED', accepted_at = now() WHERE id = $1", [invite.id]);
+      return { userId, tenantId: invite.tenant_id, membershipId: membership.rows[0].id, role: membership.rows[0].role, email };
+    });
+    const session = await issueSession(identity, req);
+    res.status(201).json({ ...session, user: { id: identity.userId, email: identity.email }, tenant: { id: identity.tenantId } });
   } catch (error) {
     next(error);
   }

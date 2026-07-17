@@ -12,6 +12,7 @@
     "test": "pnpm -r --if-present test",
     "db:migrate": "pnpm --filter @autoflow/database migrate",
     "dev:api": "pnpm --filter @autoflow/api dev",
+    "dev:web": "pnpm --filter @autoflow/web dev",
     "dev:whatsapp": "pnpm --filter @autoflow/whatsapp-worker dev",
     "dev:queue": "pnpm --filter @autoflow/queue-worker dev"
   },

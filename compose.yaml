@@ -1,0 +1,107 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: autoflow
+      POSTGRES_USER: autoflow
+      POSTGRES_PASSWORD: local-development-only
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U autoflow -d autoflow"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - redis_data:/data
+
+  migrate:
+    build:
+      context: .
+      target: runtime-api
+    command: ["node", "packages/database/dist/migrate.js"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://autoflow:local-development-only@postgres:5432/autoflow
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build:
+      context: .
+      target: runtime-api
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://autoflow:local-development-only@postgres:5432/autoflow
+      REDIS_URL: redis://redis:6379
+      WHATSAPP_SESSION_PATH: /app/.data/whatsapp-sessions
+    ports:
+      - "3001:3001"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      target: runtime-web
+    ports:
+      - "3000:8080"
+    depends_on:
+      api:
+        condition: service_started
+    restart: unless-stopped
+
+  queue-worker:
+    build:
+      context: .
+      target: runtime-queue
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://autoflow:local-development-only@postgres:5432/autoflow
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  whatsapp-worker:
+    build:
+      context: .
+      target: runtime-whatsapp
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://autoflow:local-development-only@postgres:5432/autoflow
+      REDIS_URL: redis://redis:6379
+      WHATSAPP_SESSION_PATH: /app/.data/whatsapp-sessions
+      PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    volumes:
+      - whatsapp_sessions:/app/.data/whatsapp-sessions
+    shm_size: 1gb
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  whatsapp_sessions:

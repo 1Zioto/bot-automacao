@@ -1,0 +1,233 @@
+openapi: 3.1.0
+info:
+  title: AutoFlow SaaS WhatsApp API
+  version: 1.0.0
+  description: API multiempresa para instancias, contatos, campanhas, mensagens e integracoes.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+paths:
+  /auth/register:
+    post:
+      security: []
+      summary: Criar empresa e proprietario
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Register'}
+      responses:
+        '201': {$ref: '#/components/responses/Session'}
+        '422': {$ref: '#/components/responses/Error'}
+  /auth/login:
+    post:
+      security: []
+      summary: Entrar
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: {type: string, format: email}
+                password: {type: string}
+                tenantSlug: {type: string}
+      responses:
+        '200': {$ref: '#/components/responses/Session'}
+        '401': {$ref: '#/components/responses/Error'}
+  /auth/refresh:
+    post:
+      security: []
+      summary: Renovar sessao com rotacao do refresh token
+      responses:
+        '200': {$ref: '#/components/responses/Session'}
+  /plans:
+    get:
+      security: []
+      summary: Listar planos publicos
+      responses:
+        '200': {description: Catalogo de planos}
+  /instances:
+    get:
+      summary: Listar instancias da empresa
+      responses:
+        '200': {description: Lista de instancias}
+    post:
+      summary: Criar instancia respeitando o plano
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties: {name: {type: string, minLength: 2}}
+      responses:
+        '201': {description: Instancia criada}
+        '409': {$ref: '#/components/responses/Error'}
+  /instances/{id}/initialize:
+    post:
+      summary: Inicializar ou reconectar instancia
+      parameters: [{$ref: '#/components/parameters/Id'}]
+      responses:
+        '202': {description: Inicializacao solicitada}
+  /instances/{id}/qr:
+    get:
+      summary: Obter QR temporario
+      parameters: [{$ref: '#/components/parameters/Id'}]
+      responses:
+        '200': {description: Estado e data URL do QR, se disponivel}
+  /contacts:
+    get:
+      summary: Listar contatos
+      responses:
+        '200': {description: Lista paginada}
+    post:
+      summary: Criar contato com origem de consentimento
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Contact'}
+      responses:
+        '201': {description: Contato criado}
+  /lists:
+    get:
+      summary: Listar listas
+      responses: {'200': {description: Listas da empresa}}
+    post:
+      summary: Criar lista
+      responses: {'201': {description: Lista criada}}
+  /campaigns:
+    get:
+      summary: Listar campanhas
+      responses: {'200': {description: Campanhas da empresa}}
+    post:
+      summary: Criar rascunho de campanha
+      responses: {'201': {description: Campanha criada}}
+  /campaigns/{id}/start:
+    post:
+      summary: Iniciar campanha com confirmacao de consentimento
+      parameters: [{$ref: '#/components/parameters/Id'}]
+      responses: {'202': {description: Preparacao enfileirada}}
+  /messages:
+    post:
+      security: [{apiKeyAuth: []}]
+      summary: Enviar mensagem direta idempotente
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: {type: string, minLength: 8}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [instanceId, contactId, text]
+              properties:
+                instanceId: {type: string, format: uuid}
+                contactId: {type: string, format: uuid}
+                text: {type: string, minLength: 1, maxLength: 4096}
+      responses:
+        '202': {description: Mensagem enfileirada}
+        '409': {$ref: '#/components/responses/Error'}
+  /messages/{id}:
+    get:
+      security: [{apiKeyAuth: []}]
+      summary: Consultar estado de mensagem
+      parameters: [{$ref: '#/components/parameters/Id'}]
+      responses: {'200': {description: Estado da mensagem}}
+  /api-keys:
+    get:
+      summary: Listar chaves sem revelar segredos
+      responses: {'200': {description: Chaves da empresa}}
+    post:
+      summary: Criar chave; o segredo aparece uma unica vez
+      responses: {'201': {description: Chave criada}}
+  /webhooks:
+    get:
+      summary: Listar endpoints de webhook
+      responses: {'200': {description: Endpoints}}
+    post:
+      summary: Criar endpoint assinado
+      responses: {'201': {description: Endpoint e segredo criado}}
+  /team:
+    get:
+      summary: Listar equipe e convites
+      responses: {'200': {description: Equipe}}
+  /billing/subscription:
+    get:
+      summary: Consultar assinatura e limites
+      responses: {'200': {description: Assinatura}}
+  /billing/change-plan:
+    post:
+      summary: Solicitar mudanca sem antecipar beneficios
+      responses: {'202': {description: Solicitacao pendente de confirmacao}}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: http
+      scheme: bearer
+      description: Chave wa_live com escopo apropriado.
+  parameters:
+    Id:
+      in: path
+      name: id
+      required: true
+      schema: {type: string, format: uuid}
+  schemas:
+    Register:
+      type: object
+      required: [companyName, ownerName, email, password, acceptedTermsVersion]
+      properties:
+        companyName: {type: string, minLength: 2}
+        document: {type: string}
+        timezone: {type: string, default: America/Sao_Paulo}
+        ownerName: {type: string, minLength: 2}
+        email: {type: string, format: email}
+        password: {type: string, minLength: 10}
+        acceptedTermsVersion: {type: string, example: '2026-07-16'}
+    Contact:
+      type: object
+      required: [name, phoneNumber, consentStatus, consentSource]
+      properties:
+        name: {type: string}
+        phoneNumber: {type: string}
+        consentStatus: {enum: [UNKNOWN, GRANTED, REVOKED, BLOCKED]}
+        consentSource: {type: string}
+        consentAt: {type: string, format: date-time}
+        consentEvidence: {type: string}
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: {type: string}
+            message: {type: string}
+        requestId: {type: string}
+  responses:
+    Session:
+      description: Sessao criada
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              accessToken: {type: string}
+              refreshToken: {type: string}
+              expiresIn: {type: integer, example: 900}
+    Error:
+      description: Erro padronizado
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}

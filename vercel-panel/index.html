@@ -343,29 +343,18 @@
       <p class="muted" style="margin-top:10px">No celular: WhatsApp &gt; Aparelhos conectados &gt; Conectar aparelho, e aponte para o QR.</p>
       <p class="aviso" style="margin-top:10px"><b>Desconectar</b> desliga o envio automatico e remove a sessao. Use apenas se nao quiser mais usar o servico ou se estiver com problemas. Se voce desconectou pelo celular, clique em "Gerar novo QR / Reconectar" para voltar.</p>
 
-      <h2 style="margin-top:22px">Configuracoes (anti-bloqueio)</h2>
-
-      <!-- Numero Quente -->
-      <div id="cfg_quente_wrap" style="margin-bottom:16px; padding:14px 16px; border-radius:10px; background:#fff7ed; border:1.5px solid #f97316; display:flex; align-items:center; gap:14px;">
-        <span style="font-size:28px; line-height:1">🔥</span>
-        <div style="flex:1">
-          <strong style="color:#c2410c">Numero Quente</strong>
-          <p style="margin:2px 0 0; font-size:13px; color:#7c2d12">Remove o teto diario (20/dia do aquecimento) e envia <b>todas</b> as mensagens da fila, distribuidas ao longo de <b>8 horas</b> (ex.: 80 mensagens = 1 a cada ~6 min). Ao ativar, <b>voce assume a responsabilidade</b> pelo risco de bloqueio do numero.</p>
-          <p style="margin:6px 0 0; font-size:13px; color:#7c2d12">💡 <b>Dica anti-banimento:</b> salve os destinatarios na sua agenda e peca para eles tambem salvarem o seu numero — contatos salvos dos dois lados reduzem muito a chance de banimento.</p>
-        </div>
-        <button id="cfg_quente_btn" style="white-space:nowrap; padding:8px 18px; border-radius:8px; border:none; font-size:14px; font-weight:600; cursor:pointer; transition:background .2s, color .2s;">Ativar</button>
-      </div>
+      <h2 style="margin-top:22px">Limites e horario de envio</h2>
 
       <label>Intervalo minimo entre mensagens (segundos)<input id="cfg_intervalo" type="number" min="15" max="3600" value="15"></label>
-      <label>Limite diario por numero (0 = ilimitado)<input id="cfg_limite" type="number" min="0" value="0"></label>
+      <label>Limite diario por numero<input id="cfg_limite" type="number" min="1" value="400"></label>
       <div class="cols">
         <label>Enviar a partir de (hora)<input id="cfg_jini" type="number" min="0" max="23" value="8"></label>
         <label>Enviar ate (hora)<input id="cfg_jfim" type="number" min="1" max="24" value="20"></label>
       </div>
-      <label class="row" style="margin-bottom:12px"><input id="cfg_ia" type="checkbox" style="width:auto"> Variar mensagens com IA automaticamente</label>
+      <label class="row" style="display:none"><input id="cfg_ia" type="checkbox" style="width:auto"> Variar mensagens com IA automaticamente</label>
       <button id="cfg_btn" class="acao">Salvar</button>
       <p id="cfg_res" class="msg"></p>
-      <p class="aviso" style="margin-top:10px"><b>Protecoes ativas:</b> intervalo <b>aleatorio e &ge; 15s</b> entre envios; envio apenas dentro da <b>janela de horario</b> definida acima; <b>opt-out automatico</b> (quem responder SAIR, PARAR ou STOP e removido e nao recebe mais); e, com a IA ligada, <b>cada mensagem e reescrita automaticamente</b> (mantendo o sentido e as tags). Dicas: limite diario condizente, aqueca numeros novos (comece com poucos envios/dia) e prefira contatos que consentiram. Mesmo assim, <b>nao ha garantia</b> — o uso e de sua responsabilidade.</p>
+      <p class="aviso" style="margin-top:10px"><b>Uso responsavel:</b> o limite diario e a janela de horario sao obrigatorios. Envie somente para contatos que autorizaram a comunicacao. Quem responder SAIR, PARAR ou STOP e removido automaticamente. A integracao usa WhatsApp Web nao oficial e pode sofrer desconexoes ou restricoes.</p>
     </section>
 
     <section id="enviar" class="aba">
@@ -1079,58 +1068,16 @@
     });
 
     // ---- Config ----
-    var cfgAquecimentoAtivo = true; // estado local: true = aquecimento ON (padrao), false = numero quente
-
     function cfgPayload() {
-      var quente = !cfgAquecimentoAtivo;
       return {
         intervalo_segundos:Number($('cfg_intervalo').value),
         limite_diario:Number($('cfg_limite').value),
-        ia_variar:$('cfg_ia').checked,
-        janela_inicio: quente ? 0 : Number($('cfg_jini').value),
-        janela_fim: quente ? 24 : Number($('cfg_jfim').value),
-        aquecimento: cfgAquecimentoAtivo
+        ia_variar:false,
+        janela_inicio:Number($('cfg_jini').value),
+        janela_fim:Number($('cfg_jfim').value),
+        aquecimento:true
       };
     }
-
-    function atualizarBotaoQuente() {
-      var btn = $('cfg_quente_btn');
-      var wrap = $('cfg_quente_wrap');
-      if (!cfgAquecimentoAtivo) {
-        // Numero quente ATIVO (aquecimento OFF)
-        btn.textContent = '✅ Quente — Desativar';
-        btn.style.background = '#c2410c';
-        btn.style.color = '#fff';
-        wrap.style.background = '#fff7ed';
-        wrap.style.borderColor = '#f97316';
-        $('cfg_limite').value = 0;
-        $('cfg_jini').value = 0;
-        $('cfg_jfim').value = 24;
-      } else {
-        // Numero em aquecimento (padrao)
-        btn.textContent = '🔥 Ativar Numero Quente';
-        btn.style.background = '#f97316';
-        btn.style.color = '#fff';
-        wrap.style.background = '#fff7ed';
-        wrap.style.borderColor = '#f97316';
-      }
-    }
-
-    $('cfg_quente_btn').addEventListener('click', async function(){
-      if (cfgAquecimentoAtivo) {
-        // Vai ATIVAR o modo quente: pede confirmacao de responsabilidade.
-        var ok = confirm('Ativar Numero Quente?\n\n• O teto diario sera removido e TODAS as mensagens da fila serao enviadas, distribuidas em 8 horas.\n• Ao confirmar, VOCE assume a responsabilidade pelo risco de bloqueio do numero.\n\nDica: salve os destinatarios na sua agenda e peca que salvem o seu numero — isso reduz muito a chance de banimento.');
-        if (!ok) return;
-      }
-      cfgAquecimentoAtivo = !cfgAquecimentoAtivo;
-      atualizarBotaoQuente();
-      $('cfg_res').className='msg'; $('cfg_res').textContent='Salvando...';
-      try{
-        await api('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(cfgPayload())});
-        $('cfg_res').className='msg ok';
-        $('cfg_res').textContent = cfgAquecimentoAtivo ? 'Aquecimento ativado — teto gradual de 20/dia aplicado.' : '🔥 Numero Quente ativado — toda a fila sera distribuida em 8 horas, sem teto diario (responsabilidade assumida).';
-      }catch(e){ $('cfg_res').className='msg falha'; $('cfg_res').textContent='Erro: '+e.message; cfgAquecimentoAtivo=!cfgAquecimentoAtivo; atualizarBotaoQuente(); }
-    });
 
     async function carregarConfig(){
       try{
@@ -1140,9 +1087,6 @@
         $('cfg_ia').checked=!!c.ia_variar;
         $('cfg_jini').value=c.janela_inicio;
         $('cfg_jfim').value=c.janela_fim;
-        // aquecimento: true = modo normal, false = numero quente
-        cfgAquecimentoAtivo = c.aquecimento !== false;
-        atualizarBotaoQuente();
       }catch(e){}
     }
     $('cfg_btn').addEventListener('click', async function(){
@@ -1151,8 +1095,6 @@
         $('cfg_res').className='msg ok'; $('cfg_res').textContent='Salvo.';
       }catch(e){ $('cfg_res').className='msg falha'; $('cfg_res').textContent='Erro: '+e.message; }
     });
-    atualizarBotaoQuente();
-
     if (getTok()) { api('/api/sessao').then(entrar).catch(function(){ sair(); }); }
 
     // PWA: registra o service worker

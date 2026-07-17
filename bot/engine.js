@@ -23,7 +23,6 @@ const qrcode = require('qrcode');
 const { Pool } = require('pg');
 const { proximaExecucao } = require('./_agenda');
 const { aplicarVariaveis } = require('./_texto');
-const { variarMensagem } = require('./_ia');
 require('dotenv').config();
 
 async function obterChatIdValido(client, chatId) {
@@ -288,7 +287,7 @@ function criarCliente(usuarioId, sessaoId) {
     client.on('ready', async () => {
         const numero = (client.info && client.info.wid && client.info.wid.user) || null;
         await setStatus(usuarioId, 'pronto', { qr: null, numero_conectado: numero }).catch(() => {});
-        // marca a data de conexao (1a vez) para o aquecimento gradual
+        // Mantem a data da primeira conexao para auditoria operacional.
         await q('UPDATE sessoes SET conectado_em = COALESCE(conectado_em, now()) WHERE usuario_id = $1', [usuarioId]).catch(() => {});
         const reg = clientes.get(usuarioId); if (reg) reg.status = 'pronto';
         console.log(`[sessao ${usuarioId}] pronto. Numero: ${numero}`);
@@ -396,10 +395,9 @@ async function processarFilas() {
         for (const [usuarioId, reg] of clientes) {
             if (reg.status !== 'pronto') continue;
 
-            // Configuracao anti-bloqueio do usuario.
+            // Configuracao operacional legada. O novo motor aplica limites atomicos por instancia.
             const cfg = (await q('SELECT intervalo_segundos, limite_diario, ia_variar, janela_inicio, janela_fim, aquecimento FROM configuracoes WHERE usuario_id = $1', [usuarioId])).rows[0]
                 || { intervalo_segundos: 15, limite_diario: 0, ia_variar: false, janela_inicio: 8, janela_fim: 20, aquecimento: true };
-            // Intervalo SEMPRE aleatorio e >= 15s, para nao criar sequencias previsiveis.
             const baseS = Math.max(15, Number(cfg.intervalo_segundos) || 15);
             const limite = Number(cfg.limite_diario) || 0;
 
@@ -411,28 +409,9 @@ async function processarFilas() {
                 if (!dentro) continue; // fora do horario permitido
             }
 
-            // Interpretacao robusta do flag (evita string 'f'/'false' vinda do banco ser tratada como true).
-            const aquecimentoOn = !(cfg.aquecimento === false || cfg.aquecimento === 'f' || cfg.aquecimento === 'false' || cfg.aquecimento === 0);
-
-            // Teto diario efetivo = limite do usuario + aquecimento gradual de numero novo.
-            // MODO QUENTE (aquecimento OFF): SEM teto — o usuario assume a responsabilidade
-            // e todas as mensagens da fila sao distribuidas ao longo de 8 horas.
-            let tetoDia = limite > 0 ? limite : Infinity;
-            if (aquecimentoOn) {
-                const sr = await q('SELECT conectado_em, criado_em FROM sessoes WHERE usuario_id = $1', [usuarioId]);
-                // Usa conectado_em se disponivel; fallback para criado_em; nunca usa new Date() (isso causaria dias=1 sempre).
-                const dataRef = (sr.rows[0] && sr.rows[0].conectado_em)
-                    ? new Date(sr.rows[0].conectado_em)
-                    : (sr.rows[0] && sr.rows[0].criado_em)
-                        ? new Date(sr.rows[0].criado_em)
-                        : null;
-                if (dataRef) {
-                    const dias = Math.max(1, Math.floor((Date.now() - dataRef.getTime()) / 86400000) + 1);
-                    const tetoAquecimento = Math.min(200, 20 * dias); // dia1=20, dia2=40 ... ate 200
-                    tetoDia = Math.min(tetoDia, tetoAquecimento);
-                }
-                // Se dataRef for null (sem sessao no banco), nao aplica teto de aquecimento.
-            }
+            // O legado nunca opera sem teto. Quando a configuracao antiga estiver zerada,
+            // aplica o limite conservador do plano Essencial da nova plataforma.
+            const tetoDia = limite > 0 ? limite : 400;
 
             // Quantas ja foram enviadas hoje (fuso BRT)?
             const hoje = await q(
@@ -445,26 +424,7 @@ async function processarFilas() {
             let restante = 5;
             if (Number.isFinite(tetoDia)) {
                 restante = Math.min(5, tetoDia - enviadasHoje);
-                if (restante <= 0) continue; // teto diario (limite/aquecimento) atingido
-            }
-
-            // MODO QUENTE: calcula o espacamento para distribuir TODA a fila do dia em 8 horas.
-            // Ex.: 80 mensagens -> 1 a cada ~6 min. Fila muito grande nunca fica mais rapida que o intervalo minimo.
-            let esperaQuenteMs = null;
-            if (!aquecimentoOn) {
-                const pc = await q(
-                    `SELECT COUNT(*)::int AS n FROM envios
-                     WHERE sessao_id = $1 AND status = 'pendente' AND (origem IS NULL OR origem != 'chat')
-                       AND (agendar_para IS NULL OR agendar_para <= now())`,
-                    [reg.sessaoId]
-                );
-                const totalPlanejado = pc.rows[0].n + enviadasHoje;
-                if (totalPlanejado > 0) {
-                    const JANELA_QUENTE_MS = 8 * 3600 * 1000; // 8 horas
-                    const MAX_ESPERA_MS = 360 * 1000; // teto de 6 min: fila pequena nao fica esperando horas
-                    esperaQuenteMs = Math.min(MAX_ESPERA_MS, Math.max(baseS * 1000, Math.floor(JANELA_QUENTE_MS / totalPlanejado)));
-                    console.log(`[sessao ${usuarioId}] MODO QUENTE: ${pc.rows[0].n} na fila, espacamento ~${Math.round(esperaQuenteMs / 1000)}s (distribuindo em 8h; sem teto diario).`);
-                }
+                if (restante <= 0) continue; // teto diario atingido
             }
 
             const pend = await q(
@@ -478,11 +438,7 @@ async function processarFilas() {
             for (const envio of pend.rows) {
                 try {
                     const chatId = normalizarChatId(envio.numero);
-                    // Variacao por IA (anti-bloqueio), se ativada nas configuracoes.
-                    let texto = envio.mensagem;
-                    if (cfg.ia_variar) texto = await variarMensagem(texto);
-                    
-                    await enviarConteudo(reg.client, chatId, envio, texto);
+                    await enviarConteudo(reg.client, chatId, envio, envio.mensagem);
                     await q("UPDATE envios SET status='enviada', enviado_em=now() WHERE id=$1", [envio.id]);
                     enviadasHoje++;
                     console.log(`[sessao ${usuarioId}] envio #${envio.id} -> ${envio.numero} (hoje: ${enviadasHoje})`);
@@ -491,22 +447,7 @@ async function processarFilas() {
                         [envio.id, String(e.message).slice(0, 500)]).catch(() => {});
                     console.error(`[sessao ${usuarioId}] envio #${envio.id} falhou:`, e.message);
                 }
-                if (esperaQuenteMs !== null) {
-                    // MODO QUENTE: espacamento calculado para caber tudo em 8h, com variacao de +-20%
-                    // (nao usa a pausa de 20 em 20 — o proprio espacamento ja e humano e imprevisivel).
-                    const jitter = 0.8 + Math.random() * 0.4;
-                    const esperaMs = Math.max(15000, Math.floor(esperaQuenteMs * jitter));
-                    await new Promise((r) => setTimeout(r, esperaMs));
-                } else if (enviadasHoje > 0 && enviadasHoje % 20 === 0) {
-                    // Pausa longa a cada 20 envios do dia (parece comportamento humano).
-                    const pausaMs = (120 + Math.floor(Math.random() * 180)) * 1000; // 2 a 5 min
-                    console.log(`[sessao ${usuarioId}] pausa de descanso (${Math.round(pausaMs / 1000)}s) apos ${enviadasHoje} envios.`);
-                    await new Promise((r) => setTimeout(r, pausaMs));
-                } else {
-                    // espera aleatoria: entre baseS e baseS+15s (sempre >= 15s)
-                    const esperaMs = (baseS + Math.floor(Math.random() * 16)) * 1000;
-                    await new Promise((r) => setTimeout(r, esperaMs));
-                }
+                await new Promise((resolve) => setTimeout(resolve, baseS * 1000));
             }
         }
     } catch (e) {
