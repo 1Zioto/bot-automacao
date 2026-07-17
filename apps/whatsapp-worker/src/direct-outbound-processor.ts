@@ -1,5 +1,5 @@
 import { DelayedError, type Job } from 'bullmq';
-import { getPool, query } from '@autoflow/database';
+import { connect, query } from '@autoflow/database';
 import { emitWebhookEvent } from '@autoflow/events';
 import {
   directOutboundMessageJobSchema,
@@ -117,7 +117,7 @@ export function createDirectOutboundProcessor(manager: InstanceManager) {
 }
 
 async function persistDirectMessage(message: DirectMessageRow, externalMessageId: string, usageDate: string): Promise<void> {
-  const client = await getPool().connect();
+  const client = await connect();
   try {
     await client.query('BEGIN');
     const updated = await client.query(

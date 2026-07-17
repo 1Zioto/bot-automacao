@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
-import { getPool, query } from '@autoflow/database';
+import { connect, query } from '@autoflow/database';
 import { createQueue, queueNames, type DirectOutboundMessageJob } from '@autoflow/queue';
 import { encryptText } from '@autoflow/security';
 import { AppError } from '@autoflow/shared';
@@ -34,7 +34,7 @@ router.post('/', authenticateApiKey('messages:write'), apiKeyRateLimit, async (r
     if (suppliedKey.length < 8) throw new AppError('IDEMPOTENCY_KEY_REQUIRED', 'Informe Idempotency-Key com ao menos 8 caracteres.', 422);
     const idempotencyKey = createHash('sha256').update(`${auth.tenantId}:${suppliedKey}`).digest('hex');
     const encrypted = encryptText(input.text);
-    const client = await getPool().connect();
+    const client = await connect();
     let message: { id: string; status: string; instance_id: string };
     let created = false;
     try {

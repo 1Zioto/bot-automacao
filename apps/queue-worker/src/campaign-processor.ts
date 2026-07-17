@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { Job } from 'bullmq';
-import { getPool } from '@autoflow/database';
+import { connect } from '@autoflow/database';
 import {
   campaignPreparationJobSchema,
   createQueue,
@@ -37,7 +37,7 @@ const outboundQueue = createQueue<OutboundMessageJob>(queueNames.outboundMessage
 
 export async function processCampaignPreparation(job: Job<CampaignPreparationJob>): Promise<{ prepared: number }> {
   const input = campaignPreparationJobSchema.parse(job.data);
-  const client = await getPool().connect();
+  const client = await connect();
   let prepared: PreparedRecipient[] = [];
   try {
     await client.query('BEGIN');

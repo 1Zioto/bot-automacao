@@ -1,5 +1,5 @@
 import { DelayedError, type Job } from 'bullmq';
-import { getPool, query } from '@autoflow/database';
+import { connect, query } from '@autoflow/database';
 import { emitWebhookEvent } from '@autoflow/events';
 import {
   DistributedLock,
@@ -39,7 +39,7 @@ export function createOutboundProcessor(manager: InstanceManager) {
     let usageDate: string | undefined;
     let usageReserved = false;
     try {
-      const client = await getPool().connect();
+      const client = await connect();
       let recipient: RecipientRow | undefined;
       try {
         await client.query('BEGIN');
@@ -162,7 +162,7 @@ export function createOutboundProcessor(manager: InstanceManager) {
 
 async function persistAcceptedMessage(recipient: RecipientRow, externalMessageId: string, usageDate: string): Promise<void> {
   const encrypted = encryptText(recipient.rendered_message);
-  const client = await getPool().connect();
+  const client = await connect();
   try {
     await client.query('BEGIN');
     const updated = await client.query(

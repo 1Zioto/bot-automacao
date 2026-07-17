@@ -10,6 +10,7 @@ const environmentSchema = z.object({
   API_PORT: z.coerce.number().int().positive().default(3001),
   DATABASE_URL: z.string().min(1),
   DATABASE_SCHEMA: z.string().regex(/^[a-z_][a-z0-9_]*$/).default('saas'),
+  DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(50).default(10),
   REDIS_URL: z.string().min(1),
   ACCESS_TOKEN_SECRET: z.string().min(32),
   REFRESH_TOKEN_SECRET: z.string().min(32),

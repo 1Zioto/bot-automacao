@@ -14,13 +14,24 @@ Nova base incremental do produto descrito na especificacao mestre. O sistema leg
 - webhooks assinados, auditaveis e com repeticao;
 - mensagens protegidas com AES-256-GCM e logs estruturados sem segredos.
 
-## Executar localmente
+## Arquitetura de execucao
 
-1. Copie `.env.example` para `.env` e substitua todos os segredos.
-2. Execute `docker compose up --build`.
-3. A API ficara em `http://localhost:3001`; verifique `GET /health/ready`.
+- painel e API Express: Vercel;
+- dados persistentes: PostgreSQL da Neon, no schema isolado `saas`;
+- filas compartilhadas: Redis remoto, acessivel pela Vercel e pelo computador do motor;
+- motor: `queue-worker` e `whatsapp-worker` executados localmente no Windows;
+- Docker: nao e necessario para essa configuracao.
 
-Sem Docker, instale Node.js 20+, PostgreSQL 16 e Redis 7, rode `pnpm install`, `pnpm db:migrate` e inicie os tres processos com `pnpm dev:api`, `pnpm dev:queue` e `pnpm dev:whatsapp`.
+## Executar o motor local
+
+1. Instale Node.js 20+ e execute `pnpm install`.
+2. Copie `motor.env.example` para `.env.motor.local` e preencha a Neon, o Redis e os segredos compartilhados com a Vercel.
+3. Execute as migrations uma unica vez com as mesmas variaveis de ambiente.
+4. Inicie todo o motor com `pnpm motor:start`.
+
+O computador precisa permanecer ligado para conectar as instancias e enviar mensagens. Se ele ficar desligado, os pedidos permanecem no Redis remoto e voltam a ser processados quando o motor for iniciado novamente.
+
+Para desenvolvimento totalmente local, copie `.env.example` para `.env`, substitua os segredos e use `pnpm dev:api`, `pnpm dev:queue`, `pnpm dev:whatsapp` e `pnpm dev:web`.
 
 Nunca reutilize no ambiente real os segredos ou senhas do exemplo local. A credencial antiga do banco, que chegou a existir no codigo legado, deve ser rotacionada antes da migracao de producao.
 

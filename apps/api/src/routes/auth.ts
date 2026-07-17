@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { Router, type Request } from 'express';
 import argon2 from 'argon2';
 import { loginSchema, registerTenantSchema, roleSchema } from '@autoflow/contracts';
-import { getPool, query, transaction } from '@autoflow/database';
+import { connect, query, transaction } from '@autoflow/database';
 import { hashApiKey } from '@autoflow/security';
 import { AppError } from '@autoflow/shared';
 import { z } from 'zod';
@@ -194,7 +194,7 @@ router.post('/accept-invitation', async (req, res, next) => {
 });
 
 router.post('/refresh', async (req, res, next) => {
-  const client = await getPool().connect();
+  const client = await connect();
   try {
     const { refreshToken } = refreshSchema.parse(req.body);
     await client.query('BEGIN');

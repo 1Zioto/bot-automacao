@@ -4,7 +4,7 @@
   "private": true,
   "packageManager": "pnpm@11.9.0",
   "engines": {
-    "node": ">=20"
+    "node": ">=20 <25"
   },
   "scripts": {
     "build": "pnpm -r --if-present build",
@@ -14,10 +14,12 @@
     "dev:api": "pnpm --filter @autoflow/api dev",
     "dev:web": "pnpm --filter @autoflow/web dev",
     "dev:whatsapp": "pnpm --filter @autoflow/whatsapp-worker dev",
-    "dev:queue": "pnpm --filter @autoflow/queue-worker dev"
+    "dev:queue": "pnpm --filter @autoflow/queue-worker dev",
+    "motor:start": "pnpm build && concurrently --kill-others-on-fail --names queue,whatsapp --prefix-colors cyan,magenta \"node --env-file=.env.motor.local apps/queue-worker/dist/index.js\" \"node --env-file=.env.motor.local apps/whatsapp-worker/dist/index.js\""
   },
   "devDependencies": {
     "@types/node": "^24.3.0",
+    "concurrently": "^9.2.1",
     "typescript": "~5.9.2"
   }
 }
