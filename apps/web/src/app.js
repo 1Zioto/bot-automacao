@@ -70,8 +70,14 @@ document.querySelectorAll('[data-auth-view]').forEach((button) => button.addEven
 
 $('#register-form').addEventListener('submit', async (event) => {
   event.preventDefault(); const output = event.currentTarget.querySelector('output'); output.textContent = '';
+  const form = new FormData(event.currentTarget);
+  const password = String(form.get('password') ?? '');
+  if (password.length < 10) {
+    output.textContent = 'A senha deve ter pelo menos 10 caracteres.';
+    return;
+  }
   try {
-    const data = await api('/api/v1/auth/register', { method:'POST', body:JSON.stringify(Object.fromEntries(new FormData(event.currentTarget))) });
+    const data = await api('/api/v1/auth/register', { method:'POST', body:JSON.stringify(Object.fromEntries(form)) });
     saveSession(data); await boot();
   } catch (error) { output.textContent = error.message; }
 });
