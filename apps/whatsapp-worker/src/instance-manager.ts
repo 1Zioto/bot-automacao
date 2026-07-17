@@ -1,5 +1,5 @@
 import { hostname } from 'node:os';
-import whatsappWeb, { type Client, type Message } from 'whatsapp-web.js';
+import whatsappWeb, { type Client as WhatsAppClient, type Message } from 'whatsapp-web.js';
 import QRCode from 'qrcode';
 import { getEnvironment } from '@autoflow/config';
 import { query } from '@autoflow/database';
@@ -20,7 +20,7 @@ interface InstanceRow {
 
 interface ManagedInstance {
   row: InstanceRow;
-  client: Client;
+  client: WhatsAppClient;
   lock: DistributedLock;
   renewTimer: NodeJS.Timeout;
   heartbeatTimer: NodeJS.Timeout;
@@ -64,7 +64,10 @@ export class InstanceManager {
     const rows = await query<InstanceRow>(
       `SELECT id, tenant_id, client_id, status
        FROM whatsapp_instances
-       WHERE deleted_at IS NULL AND status IN ('INITIALIZING', 'RECONNECTING', 'READY', 'PAUSED', 'DESTROYED')`,
+       WHERE deleted_at IS NULL AND status IN (
+         'INITIALIZING', 'QR_PENDING', 'AUTHENTICATING', 'RECONNECTING',
+         'READY', 'PAUSED', 'DESTROYED'
+       )`,
     );
     for (const row of rows) {
       if (row.status === 'PAUSED' || row.status === 'DESTROYED') {
