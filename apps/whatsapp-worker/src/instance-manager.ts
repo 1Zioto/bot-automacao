@@ -1,4 +1,6 @@
+import { existsSync } from 'node:fs';
 import { hostname } from 'node:os';
+import { join } from 'node:path';
 import whatsappWeb, { type Client as WhatsAppClient, type Message } from 'whatsapp-web.js';
 import QRCode from 'qrcode';
 import { getEnvironment } from '@autoflow/config';
@@ -30,6 +32,20 @@ interface ManagedInstance {
 const logger = createLogger({ name: 'instance-manager' });
 const workerId = `${hostname()}-${process.pid}`;
 const optOutPattern = /^(sair|parar|stop|cancelar|descadastrar|remover)\b/i;
+
+function resolveBrowserPath(): string | undefined {
+  const configured = process.env.CHROME_PATH?.trim();
+  const candidates = [
+    configured,
+    process.platform === 'win32' ? join(process.env.PROGRAMFILES ?? 'C:\\Program Files', 'Google', 'Chrome', 'Application', 'chrome.exe') : undefined,
+    process.platform === 'win32' ? join(process.env['PROGRAMFILES(X86)'] ?? 'C:\\Program Files (x86)', 'Google', 'Chrome', 'Application', 'chrome.exe') : undefined,
+    process.platform === 'win32' && process.env.LOCALAPPDATA ? join(process.env.LOCALAPPDATA, 'Google', 'Chrome', 'Application', 'chrome.exe') : undefined,
+    process.platform === 'win32' ? join(process.env.PROGRAMFILES ?? 'C:\\Program Files', 'Microsoft', 'Edge', 'Application', 'msedge.exe') : undefined,
+  ];
+  return candidates.find((candidate): candidate is string => Boolean(candidate && existsSync(candidate)));
+}
+
+const browserPath = resolveBrowserPath();
 
 async function emitSafely(tenantId: string, type: WebhookEventType, data: unknown): Promise<void> {
   try {
@@ -86,7 +102,16 @@ export class InstanceManager {
       authStrategy: new LocalAuth({ clientId: row.client_id, dataPath: getEnvironment().WHATSAPP_SESSION_PATH }),
       puppeteer: {
         headless: getEnvironment().WHATSAPP_HEADLESS,
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+        executablePath: browserPath,
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-accelerated-2d-canvas',
+          '--no-first-run',
+          '--no-zygote',
+          '--disable-gpu',
+        ],
       },
     });
     const renewTimer = setInterval(async () => {
