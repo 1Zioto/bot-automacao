@@ -25,9 +25,10 @@ Nova base incremental do produto descrito na especificacao mestre. O sistema leg
 ## Executar o motor local
 
 1. Instale Node.js 20+ e execute `pnpm install`.
-2. Copie `motor.env.example` para `.env.motor.local` e preencha a Neon, o Redis e os segredos compartilhados com a Vercel.
-3. Execute as migrations uma unica vez com as mesmas variaveis de ambiente.
-4. Inicie todo o motor com `pnpm motor:start`.
+2. Execute `pnpm runtime:sync` para criar `.env.motor.local` e sincronizar com seguranca as chaves da Vercel.
+3. Preencha `REDIS_URL` em `.env.motor.local` depois de provisionar o Redis compartilhado.
+4. Execute as migrations uma unica vez com as mesmas variaveis de ambiente.
+5. Inicie todo o motor com `pnpm motor:start`.
 
 O computador precisa permanecer ligado para conectar as instancias e enviar mensagens. Se ele ficar desligado, os pedidos permanecem no Redis remoto e voltam a ser processados quando o motor for iniciado novamente.
 
