@@ -13,6 +13,7 @@ api/bundle.*
 # WhatsApp credentials and browser state
 **/.wwebjs_auth/
 **/.wwebjs_cache/
+.data/
 
 # Runtime and user data
 logs/
