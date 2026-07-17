@@ -1,0 +1,1164 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Painel WhatsApp</title>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#128c7e">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Painel WA">
+  <link rel="apple-touch-icon" href="/icon-192.png">
+  <link rel="icon" type="image/png" href="/icon-192.png">
+  <style>
+    :root {
+      --bg:#f5f7fb; --panel:#fff; --text:#172033; --muted:#637083;
+      --line:#dfe5ee; --accent:#128c7e; --warning:#b45309; --danger:#b91c1c; --ok:#15803d;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; padding:24px; background:var(--bg); color:var(--text);
+      font-family:Arial,Helvetica,sans-serif; }
+    main { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:22px;
+      box-shadow:0 16px 40px rgba(16,24,40,.08); }
+    #auth { width:min(400px,100%); margin:8vh auto 0; }
+    #app { width:min(880px,100%); margin:0 auto; display:none; }
+    header { display:flex; align-items:center; justify-content:space-between; gap:16px;
+      padding-bottom:14px; border-bottom:1px solid var(--line); }
+    h1 { margin:0; font-size:20px; } h2 { margin:0 0 12px; font-size:17px; } h3{margin:14px 0 8px;font-size:14px;}
+    nav { display:flex; flex-wrap:wrap; gap:6px; margin:16px 0; }
+    nav button { background:#eef2f7; border:1px solid var(--line); border-radius:8px; padding:8px 13px;
+      font-size:14px; cursor:pointer; color:var(--text); }
+    nav button.ativo { background:var(--accent); color:#fff; border-color:var(--accent); }
+    section.aba { display:none; } section.aba.ativa { display:block; }
+    label { display:grid; gap:5px; font-size:14px; color:var(--muted); margin-bottom:12px; }
+    input,textarea,select { padding:9px 11px; border:1px solid var(--line); border-radius:6px;
+      font-size:15px; font-family:inherit; width:100%; }
+    textarea { min-height:80px; resize:vertical; }
+    button.acao { background:var(--accent); color:#fff; border:none; border-radius:6px; padding:10px 18px;
+      font-size:15px; font-weight:700; cursor:pointer; }
+    button.acao:disabled { opacity:.6; cursor:not-allowed; }
+    button.link { background:none; border:none; color:var(--accent); cursor:pointer; font-size:14px; text-decoration:underline; padding:0; }
+    button.del { background:none; border:none; color:var(--danger); cursor:pointer; font-size:13px; }
+    button.sec { background:#eef2f7; border:1px solid var(--line); border-radius:6px; padding:6px 12px; cursor:pointer; font-size:13px; }
+    .muted { margin:0; color:var(--muted); line-height:1.5; font-size:14px; }
+    .msg { margin:10px 0 0; font-size:14px; min-height:18px; }
+    .msg.ok { color:var(--ok); } .msg.falha { color:var(--danger); }
+    .qr-box { min-height:300px; display:grid; place-items:center; border:1px dashed var(--line);
+      border-radius:8px; background:#fbfcfe; padding:18px; text-align:center; }
+    .qr-box img { width:min(300px,100%); image-rendering:pixelated; }
+    .badge { display:inline-block; font-size:13px; font-weight:700; padding:5px 12px; border-radius:999px; border:1px solid var(--line); }
+    .badge.pronto { color:var(--ok); } .badge.qr { color:var(--warning); }
+    .badge.pendente,.badge.reconectar { color:var(--muted); } .badge.erro,.badge.desconectado { color:var(--danger); }
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    th,td { text-align:left; padding:7px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+    th { color:var(--muted); font-weight:700; }
+    .pill { font-size:11px; padding:2px 8px; border-radius:999px; font-weight:700; }
+    .pill.enviada { background:#e7f6ec; color:var(--ok); }
+    .pill.recebida { background:#eef2f7; color:var(--muted); }
+    .pill.pendente { background:#fff7ed; color:var(--warning); }
+    .pill.erro { background:#fef2f2; color:var(--danger); }
+    .pill.cancelada { background:#f1f5f9; color:var(--muted); }
+    .pill.ativo { background:#e7f6ec; color:var(--ok); }
+    .pill.inativo { background:#f1f5f9; color:var(--muted); }
+    .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .scroll { max-height:380px; overflow:auto; border:1px solid var(--line); border-radius:8px; }
+    .dias label { display:inline-flex; align-items:center; gap:4px; margin:0 10px 0 0; }
+    .dias input { width:auto; }
+    .cols { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    @media(max-width:620px){ .cols{ grid-template-columns:1fr; } }
+    fieldset { border:1px solid var(--line); border-radius:8px; margin:0 0 12px; padding:12px; }
+    legend { color:var(--muted); font-size:13px; padding:0 6px; }
+    .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:8px; }
+    .card { border:1px solid var(--line); border-radius:8px; padding:14px; background:#fbfcfe; }
+    .card .num { font-size:24px; font-weight:800; } .card .lbl { color:var(--muted); font-size:13px; }
+    .bar { display:flex; align-items:center; gap:8px; margin:4px 0; font-size:13px; }
+    .bar .b { height:14px; background:var(--accent); border-radius:3px; min-width:2px; }
+    .perigo { background:#fff; color:var(--danger); border:1px solid var(--danger); border-radius:6px; padding:10px 18px; font-size:15px; font-weight:700; cursor:pointer; }
+    .aviso { background:#fff7ed; border:1px solid #fed7aa; color:#7c2d12; border-radius:8px; padding:12px; font-size:14px; line-height:1.5; margin:0; }
+    .tags { display:flex; flex-wrap:wrap; gap:6px; }
+    .tag { background:#eef2f7; border:1px solid var(--line); border-radius:6px; padding:5px 10px; font-size:13px; cursor:pointer; color:var(--accent); font-weight:700; }
+    .previa { white-space:pre-wrap; background:#fbfcfe; border:1px solid var(--line); border-radius:8px; padding:12px; margin-top:10px; font-size:14px; }
+    ol { margin:0 0 10px; padding-left:20px; }
+    .logo-login { display:block; width:min(260px,80%); height:auto; margin:0 auto 14px; }
+    .brand-logo { height:34px; width:auto; vertical-align:middle; }
+    .chat-shell { display:grid; grid-template-columns:310px minmax(0,1fr); height:calc(100vh - 110px); min-height:520px; border:1px solid var(--line); border-radius:8px; overflow:hidden; background:#eef2f0; }
+    .chat-list-pane { background:#fff; border-right:1px solid var(--line); display:flex; flex-direction:column; min-width:0; }
+    .chat-search { padding:10px; border-bottom:1px solid var(--line); background:#f7f8fa; }
+    .chat-search input { border-radius:999px; background:#fff; font-size:14px; }
+    .chat-live { display:flex; align-items:center; gap:6px; padding:7px 12px; border-bottom:1px solid var(--line); color:var(--muted); font-size:12px; background:#fbfcfe; }
+    .chat-live-dot { width:8px; height:8px; border-radius:50%; background:var(--ok); box-shadow:0 0 0 3px rgba(21,128,61,.12); }
+    .chat-list { overflow:auto; flex:1; }
+    .chat-item { padding:12px 14px; border-bottom:1px solid #edf0f3; cursor:pointer; display:grid; gap:4px; }
+    .chat-item:hover,.chat-item.ativo { background:#eef7f5; }
+    .chat-item-top { display:flex; justify-content:space-between; gap:10px; align-items:center; }
+    .chat-item-name { font-weight:700; font-size:14px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .chat-item-time { color:var(--muted); font-size:12px; flex-shrink:0; }
+    .chat-item-last { color:var(--muted); font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .chat-window { min-width:0; display:flex; flex-direction:column; background:#e5ddd5; }
+    .chat-empty { flex:1; display:grid; place-items:center; text-align:center; color:var(--muted); padding:24px; }
+    .chat-head { min-height:58px; padding:10px 16px; background:#f0f2f5; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .chat-head h3 { margin:0; font-size:16px; }
+    .chat-head span { color:var(--muted); font-size:12px; }
+    .chat-history-search { width:min(280px,40%); min-width:190px; }
+    .chat-history-search input { font-size:13px; border-radius:999px; background:#fff; }
+    .chat-messages { flex:1; overflow:auto; padding:18px; display:flex; flex-direction:column; gap:8px; }
+    .chat-bubble { max-width:min(72%,560px); padding:8px 10px; border-radius:8px; box-shadow:0 1px 1px rgba(0,0,0,.08); word-break:break-word; font-size:14px; line-height:1.42; }
+    .chat-bubble.sent { align-self:flex-end; background:#d9fdd3; border-top-right-radius:2px; }
+    .chat-bubble.received { align-self:flex-start; background:#fff; border-top-left-radius:2px; }
+    .chat-time { color:#667085; font-size:11px; text-align:right; margin-top:4px; }
+    .chat-img { max-width:100%; max-height:260px; border-radius:6px; display:block; cursor:pointer; margin-bottom:6px; object-fit:cover; }
+    .chat-file { display:inline-block; margin-bottom:6px; padding:8px 10px; background:#eef2f7; color:var(--text); border-radius:6px; text-decoration:none; font-weight:700; }
+    .chat-media-missing { margin-bottom:6px; padding:8px 10px; border-radius:6px; background:#eef2f7; color:var(--muted); font-size:13px; }
+    .chat-mark { background:#fef08a; border-radius:3px; padding:0 2px; }
+    .chat-compose { padding:10px 12px; background:#f0f2f5; border-top:1px solid var(--line); display:flex; gap:10px; align-items:flex-end; }
+    .chat-compose textarea { min-height:42px; max-height:120px; resize:none; border-radius:8px; background:#fff; }
+    .chat-compose button { width:42px; height:42px; border-radius:50%; border:none; background:var(--accent); color:#fff; cursor:pointer; font-size:18px; font-weight:800; flex-shrink:0; }
+    .media-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.86); z-index:100; place-items:center; padding:20px; }
+    .media-modal img { max-width:94vw; max-height:90vh; border-radius:8px; }
+
+    /* ===== Layout com menu lateral (responsivo) ===== */
+    #app { display:none; }
+    #app { min-height:100vh; }
+    .topbar { display:none; }
+    .overlay { display:none; }
+    .sidebar { width:230px; flex-shrink:0; background:#fff; border-right:1px solid var(--line);
+      padding:16px 12px; display:flex; flex-direction:column; gap:4px; position:sticky; top:0; height:100vh; overflow:auto; }
+    .brand { font-weight:800; font-size:18px; color:var(--accent); padding:6px 8px 14px; }
+    .sidebar nav { display:flex; flex-direction:column; gap:4px; margin:0; }
+    .sidebar nav button { text-align:left; width:100%; background:none; border:none; border-radius:8px;
+      padding:11px 12px; font-size:14px; cursor:pointer; color:var(--text); }
+    .sidebar nav button:hover { background:#eef2f7; }
+    .sidebar nav button.ativo { background:var(--accent); color:#fff; }
+    #nav_admin { background:#172033; color:#fff; margin-top:6px; }
+    .side-foot { margin-top:auto; padding-top:12px; border-top:1px solid var(--line);
+      display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:13px; }
+    .conteudo { flex:1; padding:24px; width:100%; max-width:960px; }
+    .conteudo .aba.ativa { background:#fff; border:1px solid var(--line); border-radius:10px; padding:22px; }
+    .hamburger { background:none; border:none; font-size:24px; cursor:pointer; color:var(--text); line-height:1; }
+    .topbar-title { font-weight:700; font-size:16px; }
+    /* grupos recolhiveis */
+    .grupo { margin-top:4px; }
+    .grupo-titulo { width:100%; text-align:left; background:none; border:none; cursor:pointer; color:var(--muted);
+      font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.04em;
+      padding:9px 12px 5px; display:flex; justify-content:space-between; align-items:center; }
+    .grupo-itens { display:flex; flex-direction:column; gap:4px; }
+    .grupo.fechado .grupo-itens { display:none; }
+    .caret { transition:transform .15s; font-size:11px; }
+    .grupo.fechado .caret { transform:rotate(-90deg); }
+
+    @media (max-width:820px) {
+      body { padding:0; }
+      .topbar { display:flex; align-items:center; gap:12px; position:sticky; top:0;
+        background:#fff; border-bottom:1px solid var(--line); padding:10px 14px; z-index:30; }
+      .brand-logo { height:30px; }
+      #app { flex-direction:column; }
+      .sidebar { position:fixed; top:0; left:0; height:100vh; width:min(82vw,300px); z-index:40;
+        transform:translateX(-100%); transition:transform .2s ease; box-shadow:0 10px 40px rgba(0,0,0,.25); }
+      .sidebar.aberto { transform:translateX(0); }
+      .sidebar nav button { padding:13px 12px; font-size:15px; }
+      .overlay.aberto { display:block; position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:35; }
+      .conteudo { padding:12px; max-width:100%; }
+      .conteudo .aba.ativa { padding:16px; border-radius:8px; }
+      h2 { font-size:18px; } h3 { font-size:14px; }
+      /* inputs com 16px evitam zoom automatico no iOS */
+      input, textarea, select { font-size:16px; }
+      /* botoes de acao ocupam a largura no celular */
+      button.acao, .perigo { width:100%; }
+      .row { gap:8px; }
+      .row > input { flex:1 1 100%; }
+      /* tabelas: rolagem horizontal e fonte compacta */
+      .scroll { overflow:auto; -webkit-overflow-scrolling:touch; }
+      table { font-size:12px; }
+      th, td { padding:6px 6px; }
+      .cards { grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:8px; }
+      .qr-box img { width:min(82vw,300px); }
+      .chat-shell { grid-template-columns:1fr; height:calc(100vh - 128px); min-height:520px; }
+      .chat-list-pane { height:220px; border-right:none; border-bottom:1px solid var(--line); }
+      .chat-bubble { max-width:88%; }
+    }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+  <main id="auth">
+    <img src="/logo.png" alt="AutoFlow" class="logo-login" onerror="this.style.display='none'">
+    <h1 id="auth_titulo">Entrar</h1>
+    <p class="muted" style="margin:8px 0 16px">Acesse sua conta para conectar seu numero e enviar mensagens.</p>
+    <label id="lbl_nome" style="display:none">Nome<input id="a_nome" type="text" placeholder="Seu nome"></label>
+    <label>Email<input id="a_email" type="email" placeholder="voce@email.com"></label>
+    <label>Senha<input id="a_senha" type="password" placeholder="senha"></label>
+    <button id="a_btn" class="acao">Entrar</button>
+    <p id="a_res" class="msg"></p>
+    <p class="muted" style="margin-top:14px">
+      <span id="a_toggle_txt">Nao tem conta?</span>
+      <button id="a_toggle" class="link">Criar conta</button>
+    </p>
+  </main>
+
+  <div id="app">
+    <header class="topbar">
+      <button id="hamburger" class="hamburger" aria-label="Menu">&#9776;</button>
+      <img src="/logo.png" alt="AutoFlow" class="brand-logo" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'">
+      <span class="topbar-title" style="display:none">AutoFlow</span>
+    </header>
+    <div id="overlay" class="overlay"></div>
+
+    <aside class="sidebar" id="sidebar">
+      <div class="brand"><img src="/logo.png" alt="AutoFlow" style="width:100%;max-width:170px;height:auto" onerror="this.outerHTML='AutoFlow'"></div>
+      <nav>
+        <button data-aba="resumo" class="ativo">Resumo</button>
+
+        <div class="grupo">
+          <button class="grupo-titulo" data-grupo="g_msg">Mensagens <span class="caret">&#9662;</span></button>
+          <div class="grupo-itens" id="g_msg">
+            <button data-aba="enviar">Enviar</button>
+            <button data-aba="modelos">Modelos</button>
+            <button data-aba="agendar">Agendar</button>
+          </div>
+        </div>
+
+        <div class="grupo">
+          <button class="grupo-titulo" data-grupo="g_pub">Contatos &amp; Listas <span class="caret">&#9662;</span></button>
+          <div class="grupo-itens" id="g_pub">
+            <button data-aba="listas">Listas</button>
+            <button data-aba="contatos">Contatos</button>
+            <button data-aba="importar">Importar</button>
+          </div>
+        </div>
+
+        <div class="grupo">
+          <button class="grupo-titulo" data-grupo="g_reg">Registros <span class="caret">&#9662;</span></button>
+          <div class="grupo-itens" id="g_reg">
+            <button data-aba="fila">Fila</button>
+          </div>
+        </div>
+
+        <div class="grupo">
+          <button class="grupo-titulo" data-grupo="g_conta">Conta <span class="caret">&#9662;</span></button>
+          <div class="grupo-itens" id="g_conta">
+            <button data-aba="config">Configuracoes</button>
+            <button data-aba="api">API</button>
+            <button data-aba="ajuda">Ajuda</button>
+          </div>
+        </div>
+
+        <button data-aba="admin" id="nav_admin" style="display:none">Admin</button>
+      </nav>
+      <div class="side-foot">
+        <span id="quem" class="muted"></span>
+        <button id="voltar_admin" class="acao" style="display:none; padding:4px 8px; font-size:11px;">Voltar Admin</button>
+        <button class="del" id="sair">sair</button>
+      </div>
+    </aside>
+
+    <div class="conteudo">
+
+
+
+    <section id="admin" class="aba">
+      <h2>Contas cadastradas</h2>
+      <p class="muted" style="margin-bottom:10px">Visao administrativa de todas as contas do sistema.</p>
+      <div class="scroll">
+        <table><thead><tr><th>Email</th><th>Nome</th><th>Numero</th><th>Status</th><th>Enviadas</th><th>Contatos</th><th>Agend.</th><th>Criada</th><th>Ação</th></tr></thead>
+        <tbody id="adm_lista"></tbody></table>
+      </div>
+    </section>
+
+    <section id="api" class="aba">
+      <h2>API de integracao</h2>
+      <p class="muted" style="margin-bottom:10px">Use este token para enviar mensagens a partir de outra aplicacao. Mantenha-o em segredo; quem tiver o token envia pelo seu numero.</p>
+      <label>Seu token<input id="api_token" type="text" readonly value="(nenhum gerado)"></label>
+      <div class="row">
+        <button id="api_gerar" class="acao">Gerar / Regenerar token</button>
+        <button id="api_copiar" class="sec">Copiar</button>
+      </div>
+      <p id="api_res" class="msg"></p>
+      <p class="aviso" style="margin-top:8px">Ao regenerar, o token anterior para de funcionar. As mensagens enviadas por API entram na mesma fila e contam no seu Resumo (e no Historico).</p>
+      <h3>Como se comunicar com a API</h3>
+      <p class="muted" style="margin-bottom:6px">Endpoint (POST): <b id="api_url"></b></p>
+      <p class="muted" style="margin-bottom:6px">Cabecalho: <code>Content-Type: application/json</code> &nbsp;|&nbsp; Corpo (JSON): <code>token</code>, <code>numero</code> (com DDD), <code>mensagem</code> e, opcionalmente, <code>arquivo_url</code> ou <code>arquivo_base64</code>.</p>
+      <p class="muted" style="margin-bottom:6px">Resposta de sucesso: <code>{ "ok": true, "id": 123 }</code>. A mensagem ou arquivo entra na fila e sai pelo seu numero conectado.</p>
+      <p class="muted" style="margin-bottom:6px">Exemplo (curl) — clique para copiar:</p>
+      <div class="previa" id="api_exemplo" title="clique para copiar" style="cursor:pointer"></div>
+      <h3>API completa</h3>
+      <p class="muted" style="margin-bottom:6px">Use <code>Content-Type: application/json</code>. O token pode ir no corpo como <code>token</code>, na URL como <code>?token=</code> ou no cabecalho <code>Authorization: Bearer SEU_TOKEN</code>.</p>
+      <div class="previa" id="api_base" title="clique para copiar" style="cursor:pointer"></div>
+      <h3>Enviar texto</h3>
+      <div class="previa" id="api_exemplo_texto" title="clique para copiar" style="cursor:pointer"></div>
+      <h3>Enviar arquivo por URL</h3>
+      <p class="muted" style="margin-bottom:6px">Recomendado para PDFs, imagens, audios e arquivos maiores. A URL precisa estar publica.</p>
+      <div class="previa" id="api_exemplo_url" title="clique para copiar" style="cursor:pointer"></div>
+      <h3>Enviar arquivo em base64</h3>
+      <p class="muted" style="margin-bottom:6px">Use para arquivos pequenos. Informe tambem <code>mimetype</code> e <code>nome_arquivo</code>.</p>
+      <div class="previa" id="api_exemplo_base64" title="clique para copiar" style="cursor:pointer"></div>
+      <h3>Consultar status do numero</h3>
+      <div class="previa" id="api_exemplo_status" title="clique para copiar" style="cursor:pointer"></div>
+      <h3>Consultar fila e historico</h3>
+      <div class="previa" id="api_exemplo_fila" title="clique para copiar" style="cursor:pointer"></div>
+    </section>
+
+    <section id="ajuda" class="aba">
+      <h2>Como usar</h2>
+      <ol class="muted" style="line-height:1.7">
+        <li><b>Conecte seu numero</b> na aba "Meu numero": escaneie o QR com o WhatsApp do celular (Aparelhos conectados &gt; Conectar aparelho).</li>
+        <li><b>Cadastre contatos</b> (manual ou importando CSV/Excel) e organize em <b>Listas</b>.</li>
+        <li><b>Crie modelos</b> de mensagem usando as tags de mala direta (ex.: <b>{saudacao} {primeiro_nome}!</b>).</li>
+        <li><b>Agende</b> os disparos (uma vez, diario ou por dias da semana). O sistema envia sozinho no horario, pelo seu numero.</li>
+        <li>Acompanhe tudo em <b>Resumo</b>, <b>Historico</b> e <b>Fila</b>.</li>
+      </ol>
+      <h3>Sobre bloqueios (leia)</h3>
+      <p class="aviso">Esta ferramenta serve para <b>gerenciar e automatizar</b> suas mensagens de WhatsApp. Nossa logica reduz o risco de bloqueio (intervalo entre mensagens, limite diario e variacao de texto por IA), mas <b>nao ha garantia</b>: o WhatsApp pode bloquear numeros a qualquer momento. O <b>uso e de inteira responsabilidade do usuario</b> — evite spam, mensagens nao solicitadas e volumes altos para desconhecidos.</p>
+      <h3>Desconectar</h3>
+      <p class="muted">Voce pode desligar o servico na aba "Meu numero". Use isso <b>apenas</b> se nao quiser mais usar a ferramenta ou se estiver enfrentando problemas. Enquanto estiver conectado, os agendamentos continuam rodando mesmo que voce saia do painel.</p>
+    </section>
+
+    <section id="resumo" class="aba ativa">
+      <h2>Resumo</h2>
+      <div class="cards" id="rs_cards"></div>
+      <h3>Enviadas nos ultimos 7 dias</h3>
+      <div id="rs_grafico" class="scroll" style="padding:10px"></div>
+    </section>
+
+    <section id="importar" class="aba">
+      <h2>Importar contatos (CSV ou Excel)</h2>
+      <p class="muted" style="margin-bottom:10px">Colunas aceitas: <b>nome</b> e <b>numero</b> (com DDD). CSV separado por virgula ou ponto-e-virgula.</p>
+      <label>Arquivo<input id="imp_file" type="file" accept=".csv,.xlsx,.xls,text/csv"></label>
+      <label>Ou cole aqui (uma linha por contato: nome, numero)<textarea id="imp_texto" placeholder="Joao, 27999990001&#10;Maria, 11988887777"></textarea></label>
+      <label>Adicionar a uma lista (opcional)<select id="imp_lista"><option value="">(nenhuma)</option></select></label>
+      <button id="imp_btn" class="acao">Importar</button>
+      <p id="imp_res" class="msg"></p>
+      <div id="imp_previa" class="muted" style="margin-top:8px"></div>
+    </section>
+
+    <section id="config" class="aba">
+      <h2>Meu numero</h2>
+      <div class="row" style="margin-bottom:12px"><span>Status:</span> <span id="sess_badge" class="badge pendente">...</span></div>
+      <div id="qrBox" class="qr-box"><p class="muted">Carregando...</p></div>
+      <div class="row" style="margin-top:12px">
+        <button id="sess_reconectar" class="acao">Gerar novo QR / Reconectar</button>
+        <button id="sess_desconectar" class="perigo">Desconectar servico</button>
+      </div>
+      <p class="muted" style="margin-top:10px">No celular: WhatsApp &gt; Aparelhos conectados &gt; Conectar aparelho, e aponte para o QR.</p>
+      <p class="aviso" style="margin-top:10px"><b>Desconectar</b> desliga o envio automatico e remove a sessao. Use apenas se nao quiser mais usar o servico ou se estiver com problemas. Se voce desconectou pelo celular, clique em "Gerar novo QR / Reconectar" para voltar.</p>
+
+      <h2 style="margin-top:22px">Configuracoes (anti-bloqueio)</h2>
+
+      <!-- Numero Quente -->
+      <div id="cfg_quente_wrap" style="margin-bottom:16px; padding:14px 16px; border-radius:10px; background:#fff7ed; border:1.5px solid #f97316; display:flex; align-items:center; gap:14px;">
+        <span style="font-size:28px; line-height:1">🔥</span>
+        <div style="flex:1">
+          <strong style="color:#c2410c">Numero Quente</strong>
+          <p style="margin:2px 0 0; font-size:13px; color:#7c2d12">Remove o teto diario (20/dia do aquecimento) e envia <b>todas</b> as mensagens da fila, distribuidas ao longo de <b>8 horas</b> (ex.: 80 mensagens = 1 a cada ~6 min). Ao ativar, <b>voce assume a responsabilidade</b> pelo risco de bloqueio do numero.</p>
+          <p style="margin:6px 0 0; font-size:13px; color:#7c2d12">💡 <b>Dica anti-banimento:</b> salve os destinatarios na sua agenda e peca para eles tambem salvarem o seu numero — contatos salvos dos dois lados reduzem muito a chance de banimento.</p>
+        </div>
+        <button id="cfg_quente_btn" style="white-space:nowrap; padding:8px 18px; border-radius:8px; border:none; font-size:14px; font-weight:600; cursor:pointer; transition:background .2s, color .2s;">Ativar</button>
+      </div>
+
+      <label>Intervalo minimo entre mensagens (segundos)<input id="cfg_intervalo" type="number" min="15" max="3600" value="15"></label>
+      <label>Limite diario por numero (0 = ilimitado)<input id="cfg_limite" type="number" min="0" value="0"></label>
+      <div class="cols">
+        <label>Enviar a partir de (hora)<input id="cfg_jini" type="number" min="0" max="23" value="8"></label>
+        <label>Enviar ate (hora)<input id="cfg_jfim" type="number" min="1" max="24" value="20"></label>
+      </div>
+      <label class="row" style="margin-bottom:12px"><input id="cfg_ia" type="checkbox" style="width:auto"> Variar mensagens com IA automaticamente</label>
+      <button id="cfg_btn" class="acao">Salvar</button>
+      <p id="cfg_res" class="msg"></p>
+      <p class="aviso" style="margin-top:10px"><b>Protecoes ativas:</b> intervalo <b>aleatorio e &ge; 15s</b> entre envios; envio apenas dentro da <b>janela de horario</b> definida acima; <b>opt-out automatico</b> (quem responder SAIR, PARAR ou STOP e removido e nao recebe mais); e, com a IA ligada, <b>cada mensagem e reescrita automaticamente</b> (mantendo o sentido e as tags). Dicas: limite diario condizente, aqueca numeros novos (comece com poucos envios/dia) e prefira contatos que consentiram. Mesmo assim, <b>nao ha garantia</b> — o uso e de sua responsabilidade.</p>
+    </section>
+
+    <section id="enviar" class="aba">
+      <h2>Enviar mensagem (sai do seu numero)</h2>
+      <label>Numero (com DDD)<input id="env_numero" type="text" placeholder="27981416770"></label>
+      <label>Mensagem<textarea id="env_msg" placeholder="Sua mensagem... (com anexo, vira a legenda)"></textarea></label>
+      <label>Anexo (opcional, ate 3,5 MB)<input id="env_file" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.webp,.mp3,.ogg,.mp4"></label>
+      <label class="row" style="margin-bottom:12px"><input id="env_doc" type="checkbox" style="width:auto" checked> Enviar como documento (recomendado para PDF e planilhas)</label>
+      <button id="env_btn" class="acao">Enviar</button>
+      <p id="env_res" class="msg"></p>
+      <p class="aviso">Para arquivos maiores que 3,5 MB, use a API com <code>arquivo_url</code> (aba Integracoes).</p>
+    </section>
+
+    <section id="contatos" class="aba">
+      <h2>Contatos</h2>
+      <div class="row" style="margin-bottom:8px">
+        <button id="ct_importar" class="sec">Importar do WhatsApp</button>
+        <span id="ct_imp_status" class="muted"></span>
+      </div>
+      <div class="row">
+        <input id="ct_nome" type="text" placeholder="Nome" style="flex:1">
+        <input id="ct_num" type="text" placeholder="Numero (com DDD)" style="flex:1">
+        <button id="ct_btn" class="acao">Salvar</button>
+      </div>
+      <p id="ct_res" class="msg"></p>
+      <div class="row" style="margin-top:12px; justify-content: flex-end;">
+        <input id="ct_busca" type="text" placeholder="Pesquisar contato..." style="max-width: 250px;">
+      </div>
+      <div class="scroll" style="margin-top:12px">
+        <table><thead><tr><th>Nome</th><th>Numero</th><th></th></tr></thead><tbody id="ct_lista"></tbody></table>
+      </div>
+    </section>
+
+    <section id="listas" class="aba">
+      <h2>Listas de envio</h2>
+      <div class="row">
+        <input id="ls_nome" type="text" placeholder="Nome da lista" style="flex:1">
+        <button id="ls_btn" class="acao">Criar lista</button>
+      </div>
+      <p id="ls_res" class="msg"></p>
+      <div class="scroll" style="margin-top:12px">
+        <table><thead><tr><th>Lista</th><th>Contatos</th><th></th></tr></thead><tbody id="ls_lista"></tbody></table>
+      </div>
+      <div id="ls_editor" style="display:none; margin-top:16px">
+        <div class="row" style="justify-content: space-between; align-items: center; margin-bottom: 12px">
+          <h3 id="ls_editor_titulo" style="margin: 0"></h3>
+          <input id="ls_search" type="text" placeholder="Pesquisar contato..." style="max-width: 250px">
+        </div>
+        <div class="cols">
+          <div><p class="muted">Na lista</p><div class="scroll"><table><tbody id="ls_dentro"></tbody></table></div></div>
+          <div><p class="muted">Disponiveis</p><div class="scroll"><table><tbody id="ls_fora"></tbody></table></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="modelos" class="aba">
+      <h2>Construtor de mensagem (mala direta)</h2>
+      <p class="muted" style="margin-bottom:8px">Clique numa tag para inserir no texto. Elas sao trocadas pelos dados de cada contato no envio:</p>
+      <div class="tags" style="margin-bottom:10px">
+        <button type="button" class="tag" data-tag="{saudacao}">{saudacao}</button>
+        <button type="button" class="tag" data-tag="{nome}">{nome}</button>
+        <button type="button" class="tag" data-tag="{primeiro_nome}">{primeiro_nome}</button>
+        <button type="button" class="tag" data-tag="{numero}">{numero}</button>
+        <button type="button" class="tag" data-tag="{data}">{data}</button>
+        <button type="button" class="tag" data-tag="{hora}">{hora}</button>
+      </div>
+      <label>Titulo<input id="md_titulo" type="text" placeholder="Ex.: Bom dia"></label>
+      <label>Mensagem<textarea id="md_corpo" placeholder="Ex.: {saudacao}, {primeiro_nome}! Tudo bem?"></textarea></label>
+      <div class="row">
+        <button id="md_btn" class="acao">Salvar modelo</button>
+        <button id="md_ia" class="sec">Variar com IA</button>
+        <button id="md_preview_btn" class="sec">Ver previa</button>
+      </div>
+      <p id="md_res" class="msg"></p>
+      <div id="md_preview" class="previa" style="display:none"></div>
+      <h3>Modelos salvos</h3>
+      <div class="scroll">
+        <table><thead><tr><th>Titulo</th><th>Mensagem</th><th></th></tr></thead><tbody id="md_lista"></tbody></table>
+      </div>
+    </section>
+
+    <section id="agendar" class="aba">
+      <h2>Novo agendamento</h2>
+      <label>Nome (opcional)<input id="ag_nome" type="text" placeholder="Ex.: Bom dia diario"></label>
+
+      <fieldset>
+        <legend>Para quem</legend>
+        <label class="row" style="margin:0 0 8px"><input type="radio" name="ag_dest" value="lista" checked style="width:auto"> Uma lista</label>
+        <select id="ag_lista"></select>
+        <label class="row" style="margin:10px 0 0"><input type="radio" name="ag_dest" value="todos" style="width:auto"> Todos os contatos</label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Conteudo</legend>
+        <label class="row" style="margin:0 0 8px"><input type="radio" name="ag_cont" value="modelo" checked style="width:auto"> Usar modelo</label>
+        <select id="ag_modelo"></select>
+        <label class="row" style="margin:10px 0 0"><input type="radio" name="ag_cont" value="texto" style="width:auto"> Escrever texto</label>
+        <textarea id="ag_texto" placeholder="Mensagem..." style="margin-top:6px; display:none"></textarea>
+      </fieldset>
+
+      <fieldset>
+        <legend>Quando</legend>
+        <label>Frequencia
+          <select id="ag_tipo">
+            <option value="unico">Uma vez</option>
+            <option value="diario">Todo dia</option>
+            <option value="semanal">Dias da semana</option>
+            <option value="quinzenal">A cada 15 dias</option>
+            <option value="mensal">Mensal</option>
+          </select>
+        </label>
+        <label id="ag_l_data">Data e hora<input id="ag_data" type="datetime-local"></label>
+        <label id="ag_l_hora" style="display:none">Horario (HH:MM)<input id="ag_hora" type="time" value="08:00"></label>
+        <div id="ag_l_dias" class="dias" style="display:none; margin-bottom:12px">
+          <p class="muted" style="margin:0 0 6px">Dias:</p>
+          <label><input type="checkbox" class="ag_dia" value="0">Dom</label>
+          <label><input type="checkbox" class="ag_dia" value="1">Seg</label>
+          <label><input type="checkbox" class="ag_dia" value="2">Ter</label>
+          <label><input type="checkbox" class="ag_dia" value="3">Qua</label>
+          <label><input type="checkbox" class="ag_dia" value="4">Qui</label>
+          <label><input type="checkbox" class="ag_dia" value="5">Sex</label>
+          <label><input type="checkbox" class="ag_dia" value="6">Sab</label>
+        </div>
+        <div id="ag_l_dia_mes" style="display:none; margin-bottom:12px">
+          <label>Dia do mês (1-31)<input id="ag_dia_mes" type="number" min="1" max="31" value="1" style="width:60px"></label>
+        </div>
+      </fieldset>
+
+      <div class="row">
+        <button id="ag_btn" class="acao">Criar agendamento</button>
+        <button id="ag_cancelar" class="sec" style="display:none">Cancelar edicao</button>
+      </div>
+      <p id="ag_res" class="msg"></p>
+
+      <h3>Agendamentos</h3>
+      <div class="scroll">
+        <table><thead><tr><th>Nome</th><th>Quando</th><th>Proxima</th><th>Ativo</th><th></th></tr></thead><tbody id="ag_listagem"></tbody></table>
+      </div>
+    </section>
+
+
+
+    <section id="fila" class="aba">
+      <h2>Fila</h2>
+      <div class="scroll">
+        <table><thead><tr><th>Numero</th><th>Mensagem</th><th>Agendado</th><th>Status</th><th></th></tr></thead><tbody id="fila_lista"></tbody></table>
+      </div>
+    </section>
+    </div>
+  </div>
+
+  <div id="media_modal" class="media-modal" onclick="fecharMidia()">
+    <img id="media_modal_img" alt="Midia recebida">
+  </div>
+
+  <script>
+    function $(id){ return document.getElementById(id); }
+    function esc(s){ return String(s==null?'':s).replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];}); }
+    function fmt(d){ if(!d) return '-'; try { return new Date(d).toLocaleString('pt-BR'); } catch(e){ return d; } }
+    function getTok(){ return localStorage.getItem('token')||''; }
+    var DIAS=['Dom','Seg','Ter','Qua','Qui','Sex','Sab'];
+    var contatosCache=[];
+
+    async function api(url, opts){
+      opts = opts || {};
+      opts.headers = Object.assign({ 'Authorization':'Bearer '+getTok() }, opts.headers||{});
+      const r = await fetch(url, opts);
+      const d = await r.json().catch(function(){ return {}; });
+      if (r.status === 401 && url.indexOf('/api/auth')<0) { sair(); throw new Error('Sessao expirada.'); }
+      if (!r.ok) throw new Error(d.erro || 'Erro');
+      return d;
+    }
+
+    // ---- Auth ----
+    var modo='login';
+    $('a_toggle').addEventListener('click', function(){
+      modo=(modo==='login')?'registro':'login';
+      $('auth_titulo').textContent=modo==='login'?'Entrar':'Criar conta';
+      $('a_btn').textContent=modo==='login'?'Entrar':'Criar conta';
+      $('lbl_nome').style.display=modo==='login'?'none':'grid';
+      $('a_toggle_txt').textContent=modo==='login'?'Nao tem conta?':'Ja tem conta?';
+      $('a_toggle').textContent=modo==='login'?'Criar conta':'Entrar';
+      $('a_res').textContent='';
+    });
+    $('a_btn').addEventListener('click', async function(){
+      const email=$('a_email').value.trim(); const senha=$('a_senha').value;
+      $('a_res').className='msg'; $('a_res').textContent='Processando...'; $('a_btn').disabled=true;
+      try {
+        const body={ acao:modo, email:email, senha:senha };
+        if (modo==='registro') body.nome=$('a_nome').value.trim();
+        const r=await fetch('/api/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+        const d=await r.json(); if(!r.ok) throw new Error(d.erro||'Erro');
+        localStorage.setItem('token',d.token); localStorage.setItem('email',d.usuario.email); entrar();
+      } catch(e){ $('a_res').className='msg falha'; $('a_res').textContent=e.message; }
+      finally { $('a_btn').disabled=false; }
+    });
+    var ADMIN_EMAIL='douglaszioto@gmail.com';
+    function entrar(){ $('auth').style.display='none'; $('app').style.display='flex';
+      var em=(localStorage.getItem('email')||''); $('quem').textContent=em;
+      $('nav_admin').style.display=(em.toLowerCase()===ADMIN_EMAIL)?'block':'none';
+      if(localStorage.getItem('token_admin')){ $('voltar_admin').style.display='block'; } else { $('voltar_admin').style.display='none'; }
+      iniciarSessaoPoll(); carregarResumo(); }
+    function fecharMenu(){ $('sidebar').classList.remove('aberto'); $('overlay').classList.remove('aberto'); }
+    // Grupos recolhiveis do menu (com memoria)
+    (function(){
+      var fechados={}; try{ fechados=JSON.parse(localStorage.getItem('menu_fechados')||'{}'); }catch(e){}
+      document.querySelectorAll('.grupo-titulo').forEach(function(t){
+        var id=t.dataset.grupo; var grupo=t.parentElement;
+        if(fechados[id]) grupo.classList.add('fechado');
+        t.addEventListener('click', function(){
+          grupo.classList.toggle('fechado');
+          fechados[id]=grupo.classList.contains('fechado');
+          try{ localStorage.setItem('menu_fechados', JSON.stringify(fechados)); }catch(e){}
+        });
+      });
+    })();
+    $('hamburger').addEventListener('click', function(){ $('sidebar').classList.toggle('aberto'); $('overlay').classList.toggle('aberto'); });
+    $('overlay').addEventListener('click', fecharMenu);
+    function sair(){ 
+      localStorage.removeItem('token'); 
+      localStorage.removeItem('token_admin'); 
+      localStorage.removeItem('email_admin');
+      $('app').style.display='none'; 
+      $('auth').style.display='block'; 
+      $('voltar_admin').style.display='none';
+    }
+    $('sair').addEventListener('click', sair);
+    $('voltar_admin').addEventListener('click', function(){
+      var ta = localStorage.getItem('token_admin');
+      var ea = localStorage.getItem('email_admin');
+      if(ta && ea) {
+        localStorage.setItem('token', ta);
+        localStorage.setItem('email', ea);
+        localStorage.removeItem('token_admin');
+        localStorage.removeItem('email_admin');
+        location.reload();
+      }
+    });
+
+    // ---- Abas ----
+    document.querySelectorAll('nav button[data-aba]').forEach(function(b){
+      b.addEventListener('click', function(){
+        document.querySelectorAll('nav button[data-aba]').forEach(function(x){ x.classList.remove('ativo'); });
+        document.querySelectorAll('section.aba').forEach(function(x){ x.classList.remove('ativa'); });
+        b.classList.add('ativo'); $(b.dataset.aba).classList.add('ativa');
+        fecharMenu();
+        var a=b.dataset.aba;
+        if(a==='resumo') carregarResumo();
+        if(a==='contatos') carregarContatos();
+        if(a==='importar') popularImportLista();
+        if(a==='listas') carregarListas();
+        if(a==='modelos') carregarModelos();
+        if(a==='agendar'){ popularSelectsAgenda(); carregarAgendamentos(); }
+        if(a==='fila') carregarFila();
+        if(a==='config') carregarConfig();
+        if(a==='api') carregarApiToken();
+        if(a==='admin') carregarAdmin();
+      });
+    });
+
+    // ---- Admin: contas cadastradas ----
+    async function carregarAdmin(){
+      try{
+        const d=await api('/api/relatorio?contas=1');
+        $('adm_lista').innerHTML=(d.contas||[]).map(function(c){
+          return '<tr><td>'+esc(c.email)+'</td><td>'+esc(c.nome||'-')+'</td>'+
+            '<td>'+esc(c.numero_conectado||'-')+'</td>'+
+            '<td><span class="pill '+esc(c.sessao_status||'')+'">'+esc(c.sessao_status||'-')+'</span></td>'+
+            '<td>'+(c.enviadas||0)+'</td><td>'+(c.contatos||0)+'</td><td>'+(c.agendamentos_ativos||0)+'</td>'+
+            '<td>'+fmt(c.criado_em)+'</td>'+
+            '<td><button class="sec imp" data-email="'+esc(c.email)+'">Acessar</button></td></tr>';
+        }).join('')||'<tr><td colspan="9" class="muted">Nenhuma conta.</td></tr>';
+
+        $('adm_lista').querySelectorAll('.imp').forEach(function(b){ 
+          b.addEventListener('click', async function(){ 
+            if(!confirm('Entrar no painel de ' + b.dataset.email + '?')) return;
+            try {
+              const r = await fetch('/api/auth', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getTok() },
+                body: JSON.stringify({ acao: 'impersonate', email: b.dataset.email })
+              });
+              const data = await r.json();
+              if(!r.ok) throw new Error(data.erro || 'Erro');
+              localStorage.setItem('token_admin', getTok());
+              localStorage.setItem('email_admin', localStorage.getItem('email'));
+              localStorage.setItem('token', data.token);
+              localStorage.setItem('email', data.usuario.email);
+              location.reload();
+            } catch(e) { alert(e.message); }
+          }); 
+        });
+
+      }catch(e){ $('adm_lista').innerHTML='<tr><td colspan="9" class="falha">'+esc(e.message)+'</td></tr>'; }
+    }
+
+    // ---- API ----
+    function montarExemploApi(){
+      var base=location.origin+'/api/envios?api=1';
+      var sessao=location.origin+'/api/sessao?api=1';
+      if($('api_url')) $('api_url').textContent=base;
+      var tk=$('api_token').value; if(!tk || tk==='(nenhum gerado)') tk='SEU_TOKEN';
+      $('api_exemplo').textContent='curl -X POST "'+base+'" \\\n'+
+        '  -H "Content-Type: application/json" \\\n'+
+        '  -d \'{"token":"'+tk+'","numero":"27981416770","mensagem":"Ola!","arquivo_url":"https://exemplo.com/proposta.pdf","nome_arquivo":"proposta.pdf","como_documento":true}\'';
+      if($('api_base')) $('api_base').textContent=
+        'POST '+base+'\n'+
+        'GET  '+base+'&token='+tk+'&limite=50\n'+
+        'GET  '+sessao+'&token='+tk;
+      if($('api_exemplo_texto')) $('api_exemplo_texto').textContent='curl -X POST "'+base+'" \\\n'+
+        '  -H "Content-Type: application/json" \\\n'+
+        '  -d \'{"token":"'+tk+'","numero":"27981416770","mensagem":"Ola!"}\'';
+      if($('api_exemplo_url')) $('api_exemplo_url').textContent='curl -X POST "'+base+'" \\\n'+
+        '  -H "Content-Type: application/json" \\\n'+
+        '  -d \'{"token":"'+tk+'","numero":"27981416770","mensagem":"Segue o arquivo.","arquivo_url":"https://exemplo.com/proposta.pdf","nome_arquivo":"proposta.pdf","como_documento":true}\'';
+      if($('api_exemplo_base64')) $('api_exemplo_base64').textContent='curl -X POST "'+base+'" \\\n'+
+        '  -H "Content-Type: application/json" \\\n'+
+        '  -d \'{"token":"'+tk+'","numero":"27981416770","mensagem":"Segue o arquivo.","arquivo_base64":"JVBERi0xLjQ...","mimetype":"application/pdf","nome_arquivo":"proposta.pdf","como_documento":true}\'';
+      if($('api_exemplo_status')) $('api_exemplo_status').textContent='curl "'+sessao+'&token='+tk+'"';
+      if($('api_exemplo_fila')) $('api_exemplo_fila').textContent='curl "'+base+'&token='+tk+'&limite=50"';
+    }
+    ['api_exemplo','api_base','api_exemplo_texto','api_exemplo_url','api_exemplo_base64','api_exemplo_status','api_exemplo_fila'].forEach(function(id){
+      var el=$(id); if(!el) return;
+      el.addEventListener('click', function(){
+        navigator.clipboard && navigator.clipboard.writeText(el.textContent).then(function(){
+          $('api_res').className='msg ok'; $('api_res').textContent='Exemplo copiado.';
+        });
+      });
+    });
+    async function carregarApiToken(){
+      try{ const d=await api('/api/config?recurso=token'); $('api_token').value=d.api_token||'(nenhum gerado)'; }catch(e){}
+      montarExemploApi();
+    }
+    $('api_gerar').addEventListener('click', async function(){
+      if(!confirm('Gerar um novo token? O token anterior deixara de funcionar.')) return;
+      $('api_res').className='msg'; $('api_res').textContent='Gerando...';
+      try{ const d=await api('/api/config?recurso=token',{method:'POST'}); $('api_token').value=d.api_token;
+        $('api_res').className='msg ok'; $('api_res').textContent='Token gerado.'; montarExemploApi();
+      }catch(e){ $('api_res').className='msg falha'; $('api_res').textContent='Erro: '+e.message; }
+    });
+    $('api_copiar').addEventListener('click', function(){
+      const t=$('api_token').value; if(!t || t==='(nenhum gerado)') return;
+      navigator.clipboard.writeText(t).then(function(){ $('api_res').className='msg ok'; $('api_res').textContent='Copiado.'; });
+    });
+
+    // ---- Sessao/QR ----
+    var pollTimer=null;
+    function iniciarSessaoPoll(){ atualizarSessao(); pollTimer=setInterval(atualizarSessao,3000); }
+    function pararSessaoPoll(){ if(pollTimer) clearInterval(pollTimer); pollTimer=null; }
+    async function atualizarSessao(){
+      try{ const s=await api('/api/sessao');
+        $('sess_badge').textContent=s.status; $('sess_badge').className='badge '+s.status;
+        if(s.status==='qr'&&s.qr){ $('qrBox').innerHTML='<img src="'+s.qr+'" alt="QR"><p class="muted" style="margin-top:8px">Escaneie no WhatsApp (o QR expira em ~2 min).</p>'; }
+        else if(s.status==='pronto'){ $('qrBox').innerHTML='<p class="muted">Numero conectado'+(s.numero_conectado?': <b>'+esc(s.numero_conectado)+'</b>':'')+'.<br>Voce ja pode enviar.</p>'; }
+        else if(s.status==='conectando'||s.status==='reconectar'){ $('qrBox').innerHTML='<p class="muted">Conectando... gerando o QR, aguarde alguns segundos.</p>'; }
+        else if(s.status==='pendente'||s.status==='desconectado'||s.status==='desconectar'){ $('qrBox').innerHTML='<p class="muted">Numero nao conectado. Clique em <b>"Gerar novo QR / Reconectar"</b> para conectar.</p>'; }
+        else { $('qrBox').innerHTML='<p class="muted">Status: '+esc(s.status)+'</p>'; }
+      }catch(e){}
+    }
+    $('sess_reconectar').addEventListener('click', async function(){ try{ await api('/api/sessao',{method:'POST'}); $('qrBox').innerHTML='<p class="muted">Solicitado novo QR...</p>'; }catch(e){} });
+    $('sess_desconectar').addEventListener('click', async function(){
+      if(!confirm('Desconectar o servico? O envio automatico para e a sessao do WhatsApp e removida. Use apenas se nao quiser mais usar ou se estiver com problemas.')) return;
+      try{ await api('/api/sessao?acao=desconectar',{method:'POST'}); $('qrBox').innerHTML='<p class="muted">Servico desconectado.</p>'; }catch(e){ alert('Erro: '+e.message); }
+    });
+
+    // ---- Enviar ----
+    var ENV_MAX_ANEXO = 3.5 * 1024 * 1024; // limite do corpo na Vercel (base64 aumenta ~33%)
+
+    function lerArquivoBase64(input){
+      return new Promise(function(resolve, reject){
+        var f = input.files && input.files[0];
+        if (!f) return resolve(null);
+        if (f.size > ENV_MAX_ANEXO) return reject(new Error('Anexo com ' + (f.size/1048576).toFixed(1) + ' MB. Maximo: 3,5 MB (use arquivo_url pela API para maiores).'));
+        var r = new FileReader();
+        r.onload = function(){ resolve({ base64: String(r.result).split(',')[1], mimetype: f.type || 'application/octet-stream', nome: f.name }); };
+        r.onerror = function(){ reject(new Error('Falha ao ler o arquivo.')); };
+        r.readAsDataURL(f);
+      });
+    }
+
+    $('env_btn').addEventListener('click', async function(){
+      const numero=$('env_numero').value.trim(); const mensagem=$('env_msg').value.trim();
+      $('env_res').className='msg'; $('env_res').textContent='Enviando...'; $('env_btn').disabled=true;
+      try{
+        var anexo = await lerArquivoBase64($('env_file'));
+        if (!mensagem && !anexo) throw new Error('Escreva uma mensagem ou escolha um anexo.');
+        var payload = { numero: numero, mensagem: mensagem };
+        if (anexo) {
+          payload.arquivo_base64 = anexo.base64;
+          payload.mimetype = anexo.mimetype;
+          payload.nome_arquivo = anexo.nome;
+          payload.como_documento = $('env_doc').checked;
+        }
+        const d=await api('/api/envios',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+        $('env_res').className='msg ok'; $('env_res').textContent=d.criados+' na fila'+(anexo?' com anexo "'+anexo.nome+'"':'')+'. Sai pelo seu numero.'; $('env_msg').value=''; $('env_file').value='';
+      }catch(e){ $('env_res').className='msg falha'; $('env_res').textContent='Erro: '+e.message; }
+      finally { $('env_btn').disabled=false; }
+    });
+
+    // ---- Contatos ----
+    async function carregarContatos(){
+      try{ const lista=await api('/api/contatos');
+        $('ct_lista').innerHTML=lista.map(function(c){ return '<tr><td>'+esc(c.nome)+'</td><td>'+esc(c.numero)+'</td><td><button class="del" data-id="'+c.id+'">remover</button></td></tr>'; }).join('')||'<tr><td colspan="3" class="muted">Nenhum contato.</td></tr>';
+        $('ct_lista').querySelectorAll('.del').forEach(function(b){ b.addEventListener('click', async function(){ await api('/api/contatos?id='+b.dataset.id,{method:'DELETE'}); carregarContatos(); }); });
+        if($('ct_busca')) $('ct_busca').dispatchEvent(new Event('input'));
+      }catch(e){ $('ct_lista').innerHTML='<tr><td colspan="3" class="falha">'+esc(e.message)+'</td></tr>'; }
+    }
+    if($('ct_busca')) {
+      $('ct_busca').addEventListener('input', function(){
+        var termo = this.value.toLowerCase().trim();
+        var linhas = $('ct_lista').querySelectorAll('tr');
+        linhas.forEach(function(tr){
+          if(tr.cells.length < 3) return; // ignore empty state
+          var texto = (tr.cells[0].textContent + ' ' + tr.cells[1].textContent).toLowerCase();
+          tr.style.display = texto.indexOf(termo) >= 0 ? '' : 'none';
+        });
+      });
+    }
+    $('ct_btn').addEventListener('click', async function(){
+      const nome=$('ct_nome').value.trim(); const numero=$('ct_num').value.trim(); $('ct_res').className='msg';
+      try{ await api('/api/contatos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome,numero})});
+        $('ct_nome').value=''; $('ct_num').value=''; $('ct_res').className='msg ok'; $('ct_res').textContent='Salvo.'; carregarContatos();
+      }catch(e){ $('ct_res').className='msg falha'; $('ct_res').textContent='Erro: '+e.message; }
+    });
+    var impTimer=null;
+    $('ct_importar').addEventListener('click', async function(){
+      if(!confirm('Importar os contatos salvos do WhatsApp conectado para a sua agenda?')) return;
+      $('ct_imp_status').textContent='Solicitado... aguardando o motor (precisa estar conectado).'; $('ct_importar').disabled=true;
+      try{ await api('/api/sessao?acao=importar',{method:'POST'}); }
+      catch(e){ $('ct_imp_status').textContent='Erro: '+e.message; $('ct_importar').disabled=false; return; }
+      if(impTimer) clearInterval(impTimer);
+      var tentativas=0;
+      impTimer=setInterval(async function(){
+        tentativas++;
+        try{ const s=await api('/api/sessao');
+          if(!s.importar_contatos){ // concluido
+            clearInterval(impTimer); $('ct_importar').disabled=false;
+            $('ct_imp_status').textContent=s.importar_resultado||'Concluido.'; carregarContatos();
+          } else { $('ct_imp_status').textContent='Importando... ('+tentativas+')'; }
+        }catch(e){}
+        if(tentativas>60){ clearInterval(impTimer); $('ct_importar').disabled=false; }
+      },2000);
+    });
+
+    // ---- Listas ----
+    async function carregarListas(){
+      try{ const lista=await api('/api/listas');
+        $('ls_lista').innerHTML=lista.map(function(l){ return '<tr><td>'+esc(l.nome)+'</td><td>'+l.total+'</td><td><button class="sec ger" data-id="'+l.id+'" data-nome="'+esc(l.nome)+'">gerenciar</button> <button class="del" data-id="'+l.id+'">remover</button></td></tr>'; }).join('')||'<tr><td colspan="3" class="muted">Nenhuma lista.</td></tr>';
+        $('ls_lista').querySelectorAll('.del').forEach(function(b){ b.addEventListener('click', async function(){ await api('/api/listas?id='+b.dataset.id,{method:'DELETE'}); $('ls_editor').style.display='none'; carregarListas(); }); });
+        $('ls_lista').querySelectorAll('.ger').forEach(function(b){ b.addEventListener('click', function(){ abrirEditorLista(b.dataset.id, b.dataset.nome); }); });
+      }catch(e){ $('ls_lista').innerHTML='<tr><td colspan="3" class="falha">'+esc(e.message)+'</td></tr>'; }
+    }
+    $('ls_btn').addEventListener('click', async function(){
+      const nome=$('ls_nome').value.trim(); $('ls_res').className='msg';
+      try{ await api('/api/listas',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome})});
+        $('ls_nome').value=''; $('ls_res').className='msg ok'; $('ls_res').textContent='Lista criada.'; carregarListas();
+      }catch(e){ $('ls_res').className='msg falha'; $('ls_res').textContent='Erro: '+e.message; }
+    });
+    var listaAtual=null;
+    async function abrirEditorLista(id, nome){
+      listaAtual=id; $('ls_editor').style.display='block'; $('ls_editor_titulo').textContent='Lista: '+nome;
+      if($('ls_search')) $('ls_search').value = '';
+      const d=await api('/api/lista-itens?lista_id='+id);
+      $('ls_dentro').innerHTML=d.dentro.map(function(c){ return '<tr><td>'+esc(c.nome)+'</td><td><button class="del rm" data-id="'+c.id+'">tirar</button></td></tr>'; }).join('')||'<tr><td class="muted">Vazia.</td></tr>';
+      $('ls_fora').innerHTML=d.fora.map(function(c){ return '<tr><td>'+esc(c.nome)+'</td><td><button class="sec add" data-id="'+c.id+'">add</button></td></tr>'; }).join('')||'<tr><td class="muted">Todos ja na lista.</td></tr>';
+      $('ls_dentro').querySelectorAll('.rm').forEach(function(b){ b.addEventListener('click', async function(){ await api('/api/lista-itens?lista_id='+id+'&contato_id='+b.dataset.id,{method:'DELETE'}); abrirEditorLista(id,nome); carregarListas(); }); });
+      $('ls_fora').querySelectorAll('.add').forEach(function(b){ b.addEventListener('click', async function(){ await api('/api/lista-itens',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lista_id:Number(id),contato_id:Number(b.dataset.id)})}); abrirEditorLista(id,nome); carregarListas(); }); });
+    }
+
+    $('ls_search').addEventListener('input', function(e) {
+      const val = e.target.value.toLowerCase();
+      document.querySelectorAll('#ls_dentro tr, #ls_fora tr').forEach(function(tr){
+        const td = tr.querySelector('td');
+        if (!td || td.classList.contains('muted')) return;
+        tr.style.display = td.textContent.toLowerCase().includes(val) ? '' : 'none';
+      });
+    });
+
+    // ---- Modelos ----
+    async function carregarModelos(){
+      try{ const lista=await api('/api/modelos');
+        $('md_lista').innerHTML=lista.map(function(m){ return '<tr><td>'+esc(m.titulo)+'</td><td>'+esc(m.corpo)+'</td><td><button class="del" data-id="'+m.id+'">remover</button></td></tr>'; }).join('')||'<tr><td colspan="3" class="muted">Nenhum modelo.</td></tr>';
+        $('md_lista').querySelectorAll('.del').forEach(function(b){ b.addEventListener('click', async function(){ await api('/api/modelos?id='+b.dataset.id,{method:'DELETE'}); carregarModelos(); }); });
+      }catch(e){ $('md_lista').innerHTML='<tr><td colspan="3" class="falha">'+esc(e.message)+'</td></tr>'; }
+    }
+    $('md_btn').addEventListener('click', async function(){
+      const titulo=$('md_titulo').value.trim(); const corpo=$('md_corpo').value.trim(); $('md_res').className='msg';
+      try{ await api('/api/modelos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({titulo,corpo})});
+        $('md_titulo').value=''; $('md_corpo').value=''; $('md_res').className='msg ok'; $('md_res').textContent='Modelo salvo.'; $('md_preview').style.display='none'; carregarModelos();
+      }catch(e){ $('md_res').className='msg falha'; $('md_res').textContent='Erro: '+e.message; }
+    });
+    // Inserir tag no ponto do cursor
+    document.querySelectorAll('.tag').forEach(function(b){
+      b.addEventListener('click', function(){
+        var ta=$('md_corpo'); var ini=ta.selectionStart||ta.value.length; var fim=ta.selectionEnd||ta.value.length;
+        ta.value=ta.value.slice(0,ini)+b.dataset.tag+ta.value.slice(fim); ta.focus();
+        var p=ini+b.dataset.tag.length; ta.setSelectionRange(p,p);
+      });
+    });
+    // Previa com um contato de exemplo
+    function aplicarVarsPreview(t){
+      var ag=new Date(); var dd=String(ag.getDate()).padStart(2,'0'), mm=String(ag.getMonth()+1).padStart(2,'0');
+      var hh=String(ag.getHours()).padStart(2,'0'), mi=String(ag.getMinutes()).padStart(2,'0');
+      var sa=ag.getHours()<12?'Bom dia':(ag.getHours()<18?'Boa tarde':'Boa noite');
+      return String(t).replace(/\{primeiro_nome\}/gi,'Maria').replace(/\{nome\}/gi,'Maria Silva')
+        .replace(/\{numero\}/gi,'5527999990001').replace(/\{data\}/gi,dd+'/'+mm+'/'+ag.getFullYear())
+        .replace(/\{hora\}/gi,hh+':'+mi).replace(/\{saudacao\}/gi,sa);
+    }
+    $('md_preview_btn').addEventListener('click', function(){
+      $('md_preview').style.display='block';
+      $('md_preview').textContent=aplicarVarsPreview($('md_corpo').value||'(vazio)');
+    });
+    $('md_ia').addEventListener('click', async function(){
+      var t=$('md_corpo').value.trim(); if(!t){ return; }
+      $('md_res').className='msg'; $('md_res').textContent='Gerando variacao com IA...';
+      try{ const d=await api('/api/ia',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({texto:t})});
+        $('md_corpo').value=d.texto; $('md_res').className='msg ok'; $('md_res').textContent='Texto variado pela IA.';
+      }catch(e){ $('md_res').className='msg falha'; $('md_res').textContent='Erro: '+e.message; }
+    });
+
+    // ---- Agendar ----
+    function radioVal(name){ var el=document.querySelector('input[name="'+name+'"]:checked'); return el?el.value:null; }
+    document.querySelectorAll('input[name="ag_dest"]').forEach(function(r){ r.addEventListener('change', function(){ $('ag_lista').style.display=radioVal('ag_dest')==='lista'?'block':'none'; }); });
+    document.querySelectorAll('input[name="ag_cont"]').forEach(function(r){ r.addEventListener('change', function(){ var m=radioVal('ag_cont')==='modelo'; $('ag_modelo').style.display=m?'block':'none'; $('ag_texto').style.display=m?'none':'block'; }); });
+    $('ag_tipo').addEventListener('change', function(){
+      var t=$('ag_tipo').value;
+      $('ag_l_data').style.display=t==='unico'?'grid':'none';
+      $('ag_l_hora').style.display=t==='unico'?'none':'grid';
+      $('ag_l_dias').style.display=t==='semanal'?'block':'none';
+      $('ag_l_dia_mes').style.display=t==='mensal'?'block':'none';
+    });
+    async function popularSelectsAgenda(){
+      try{
+        const listas=await api('/api/listas');
+        $('ag_lista').innerHTML=listas.map(function(l){ return '<option value="'+l.id+'">'+esc(l.nome)+' ('+l.total+')</option>'; }).join('')||'<option value="">(crie uma lista)</option>';
+        const modelos=await api('/api/modelos');
+        $('ag_modelo').innerHTML=modelos.map(function(m){ return '<option value="'+m.id+'">'+esc(m.titulo)+'</option>'; }).join('')||'<option value="">(crie um modelo)</option>';
+      }catch(e){}
+    }
+    var agEditandoId = null;
+
+    function sairModoEdicaoAgenda(){
+      agEditandoId = null;
+      $('ag_btn').textContent = 'Criar agendamento';
+      $('ag_cancelar').style.display = 'none';
+      $('ag_nome').value=''; $('ag_texto').value='';
+    }
+    $('ag_cancelar').addEventListener('click', function(){ sairModoEdicaoAgenda(); $('ag_res').className='msg'; $('ag_res').textContent=''; });
+
+    function marcarRadio(nome, valor){
+      var el = document.querySelector('input[name="'+nome+'"][value="'+valor+'"]');
+      if (el) { el.checked = true; el.dispatchEvent(new Event('change', { bubbles: true })); }
+    }
+    function paraDatetimeLocal(iso){
+      if (!iso) return '';
+      var d = new Date(iso);
+      d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+      return d.toISOString().slice(0,16);
+    }
+    function editarAgendamento(a){
+      agEditandoId = a.id;
+      $('ag_nome').value = a.nome || '';
+      marcarRadio('ag_dest', a.destino_tipo === 'todos' ? 'todos' : 'lista');
+      if (a.lista_id) $('ag_lista').value = String(a.lista_id);
+      marcarRadio('ag_cont', a.conteudo_tipo === 'modelo' ? 'modelo' : 'texto');
+      if (a.modelo_id) $('ag_modelo').value = String(a.modelo_id);
+      $('ag_texto').value = a.mensagem || '';
+      $('ag_tipo').value = a.tipo;
+      $('ag_tipo').dispatchEvent(new Event('change', { bubbles: true }));
+      if (a.tipo === 'unico') $('ag_data').value = paraDatetimeLocal(a.proxima_execucao);
+      else $('ag_hora').value = (a.horario || '08:00').slice(0,5);
+      if (a.tipo === 'semanal') document.querySelectorAll('.ag_dia').forEach(function(c){ c.checked = (a.dias_semana||[]).indexOf(Number(c.value)) >= 0; });
+      if (a.tipo === 'mensal') $('ag_dia_mes').value = (a.dias_semana && a.dias_semana[0]) || 1;
+      $('ag_btn').textContent = 'Salvar alteracoes';
+      $('ag_cancelar').style.display = '';
+      $('ag_res').className='msg'; $('ag_res').textContent='Editando "'+(a.nome||('agendamento #'+a.id))+'"...';
+      $('ag_nome').scrollIntoView({ behavior:'smooth', block:'center' });
+    }
+
+    $('ag_btn').addEventListener('click', async function(){
+      var editando = agEditandoId;
+      $('ag_res').className='msg'; $('ag_res').textContent=editando?'Salvando...':'Criando...'; $('ag_btn').disabled=true;
+      try{
+        var body={ nome:$('ag_nome').value.trim(), destino_tipo:radioVal('ag_dest'), conteudo_tipo:radioVal('ag_cont'), tipo:$('ag_tipo').value };
+        if(body.destino_tipo==='lista') body.lista_id=Number($('ag_lista').value)||null;
+        if(body.conteudo_tipo==='modelo') body.modelo_id=Number($('ag_modelo').value)||null; else body.mensagem=$('ag_texto').value.trim();
+        if(body.tipo==='unico') body.agendar_para=$('ag_data').value; else body.horario=$('ag_hora').value;
+        if(body.tipo==='semanal') body.dias_semana=Array.prototype.slice.call(document.querySelectorAll('.ag_dia:checked')).map(function(c){return Number(c.value);});
+        if(body.tipo==='mensal') body.dias_semana=[Number($('ag_dia_mes').value)];
+        var url = editando ? '/api/agendamentos?id='+editando : '/api/agendamentos';
+        await api(url,{method:editando?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+        $('ag_res').className='msg ok'; $('ag_res').textContent=editando?'Agendamento atualizado.':'Agendamento criado.';
+        if (editando) sairModoEdicaoAgenda();
+        carregarAgendamentos();
+      }catch(e){ $('ag_res').className='msg falha'; $('ag_res').textContent='Erro: '+e.message; }
+      finally { $('ag_btn').disabled=false; }
+    });
+    function descreveAgenda(a){
+      if(a.tipo==='unico') return 'Uma vez';
+      if(a.tipo==='diario') return 'Todo dia '+(a.horario||'');
+      if(a.tipo==='semanal'){ var ds=(a.dias_semana||[]).map(function(n){return DIAS[n];}).join(','); return ds+' '+(a.horario||''); }
+      if(a.tipo==='quinzenal') return 'A cada 15 dias '+(a.horario||'');
+      if(a.tipo==='mensal'){ var dm=(a.dias_semana&&a.dias_semana[0])||''; return 'Mensal (dia '+dm+') '+(a.horario||''); }
+      return a.tipo;
+    }
+    async function carregarAgendamentos(){
+      try{ const lista=await api('/api/agendamentos');
+        $('ag_listagem').innerHTML=lista.map(function(a){
+          var alvo=(a.destino_tipo==='todos'?'todos':(a.lista_nome||'lista'));
+          var cont=(a.conteudo_tipo==='modelo'?(a.modelo_titulo||'modelo'):'texto');
+          var nome=esc(a.nome||(alvo+' / '+cont));
+          return '<tr><td>'+nome+'</td><td>'+esc(descreveAgenda(a))+'</td><td>'+(a.proxima_execucao?fmt(a.proxima_execucao):'-')+'</td>'+
+            '<td><span class="pill '+(a.ativo?'ativo':'inativo')+'">'+(a.ativo?'ativo':'inativo')+'</span></td>'+
+            '<td><button class="sec ed" data-id="'+a.id+'">editar</button> <button class="sec tg" data-id="'+a.id+'">'+(a.ativo?'pausar':'ativar')+'</button> <button class="del" data-id="'+a.id+'">excluir</button></td></tr>';
+        }).join('')||'<tr><td colspan="5" class="muted">Nenhum agendamento.</td></tr>';
+        $('ag_listagem').querySelectorAll('.ed').forEach(function(b){ b.addEventListener('click', function(){ var a=lista.find(function(x){return String(x.id)===b.dataset.id;}); if(a) editarAgendamento(a); }); });
+        $('ag_listagem').querySelectorAll('.del').forEach(function(b){ b.addEventListener('click', async function(){ if(String(b.dataset.id)===String(agEditandoId)) sairModoEdicaoAgenda(); await api('/api/agendamentos?id='+b.dataset.id,{method:'DELETE'}); carregarAgendamentos(); }); });
+        $('ag_listagem').querySelectorAll('.tg').forEach(function(b){ b.addEventListener('click', async function(){ await api('/api/agendamentos?id='+b.dataset.id,{method:'PATCH'}); carregarAgendamentos(); }); });
+      }catch(e){ $('ag_listagem').innerHTML='<tr><td colspan="5" class="falha">'+esc(e.message)+'</td></tr>'; }
+    }
+
+
+
+    // ---- Fila ----
+    async function carregarFila(){
+      try{ const lista=await api('/api/envios?limite=100');
+        $('fila_lista').innerHTML=lista.map(function(e){ var btn=e.status==='pendente'?'<button class="del" data-id="'+e.id+'">cancelar</button>':''; return '<tr><td>'+esc(e.numero)+'</td><td>'+esc(e.mensagem)+'</td><td>'+(e.agendar_para?fmt(e.agendar_para):'-')+'</td><td><span class="pill '+esc(e.status)+'">'+esc(e.status)+'</span>'+(e.erro?'<br><span class="muted">'+esc(e.erro)+'</span>':'')+'</td><td>'+btn+'</td></tr>'; }).join('')||'<tr><td colspan="5" class="muted">Fila vazia.</td></tr>';
+        $('fila_lista').querySelectorAll('.del').forEach(function(b){ b.addEventListener('click', async function(){ await api('/api/envios?acao=cancelar&id='+b.dataset.id,{method:'POST'}); carregarFila(); }); });
+      }catch(e){ $('fila_lista').innerHTML='<tr><td colspan="5" class="falha">'+esc(e.message)+'</td></tr>'; }
+    }
+
+    // ---- Resumo ----
+    async function carregarResumo(){
+      try{
+        const d=await api('/api/relatorio');
+        const c=[
+          ['Enviadas', d.mensagens.enviadas],
+          ['Enviadas 24h', d.mensagens.enviadas_24h],
+          ['Por API', d.mensagens.enviadas_api||0],
+          ['Por agenda', d.mensagens.enviadas_agenda||0],
+          ['Recebidas', d.mensagens.recebidas],
+          ['Na fila', d.fila.pendentes],
+          ['Erros', d.fila.erros],
+          ['Contatos', d.gerais.contatos],
+          ['Listas', d.gerais.listas],
+          ['Agend. ativos', d.gerais.agendamentos_ativos]
+        ];
+        $('rs_cards').innerHTML=c.map(function(x){ return '<div class="card"><div class="num">'+x[1]+'</div><div class="lbl">'+x[0]+'</div></div>'; }).join('');
+        var max=Math.max.apply(null, d.por_dia.map(function(x){return x.total;}).concat([1]));
+        $('rs_grafico').innerHTML=d.por_dia.map(function(x){ var w=Math.round(x.total/max*220); return '<div class="bar"><span style="width:46px">'+esc(x.dia)+'</span><span class="b" style="width:'+w+'px"></span><span>'+x.total+'</span></div>'; }).join('')||'<p class="muted">Sem envios nos ultimos 7 dias.</p>';
+      }catch(e){ $('rs_cards').innerHTML='<p class="falha">'+esc(e.message)+'</p>'; }
+    }
+
+    // ---- Importar ----
+    async function popularImportLista(){
+      try{ const listas=await api('/api/listas');
+        $('imp_lista').innerHTML='<option value="">(nenhuma)</option>'+listas.map(function(l){ return '<option value="'+l.id+'">'+esc(l.nome)+'</option>'; }).join('');
+      }catch(e){}
+    }
+    function parseCSV(texto){
+      var linhas=texto.split(/\r?\n/).map(function(l){return l.trim();}).filter(Boolean);
+      var out=[];
+      linhas.forEach(function(l){
+        // pula cabecalho
+        if(/^nome\s*[,;]\s*numero/i.test(l)) return;
+        var p=l.split(/[,;\t]/);
+        if(p.length>=2){ out.push({ nome:p[0].trim(), numero:p[1].trim() }); }
+      });
+      return out;
+    }
+    var impDados=[];
+    function mostrarPrevia(){ $('imp_previa').textContent=impDados.length?('Pronto para importar '+impDados.length+' contato(s).'):''; }
+    $('imp_texto').addEventListener('input', function(){ impDados=parseCSV($('imp_texto').value); mostrarPrevia(); });
+    $('imp_file').addEventListener('change', function(ev){
+      var f=ev.target.files[0]; if(!f) return;
+      var nome=f.name.toLowerCase();
+      var reader=new FileReader();
+      if(nome.endsWith('.xlsx')||nome.endsWith('.xls')){
+        reader.onload=function(e){
+          try{
+            var wb=XLSX.read(e.target.result,{type:'array'});
+            var ws=wb.Sheets[wb.SheetNames[0]];
+            var rows=XLSX.utils.sheet_to_json(ws,{header:1});
+            impDados=[];
+            rows.forEach(function(r){
+              if(!r||r.length<2) return;
+              var n=String(r[0]||'').trim(), num=String(r[1]||'').trim();
+              if(/^nome$/i.test(n)) return;
+              if(n&&num) impDados.push({nome:n,numero:num});
+            });
+            mostrarPrevia();
+          }catch(err){ $('imp_res').className='msg falha'; $('imp_res').textContent='Erro ao ler Excel: '+err.message; }
+        };
+        reader.readAsArrayBuffer(f);
+      } else {
+        reader.onload=function(e){ impDados=parseCSV(e.target.result); mostrarPrevia(); };
+        reader.readAsText(f);
+      }
+    });
+    $('imp_btn').addEventListener('click', async function(){
+      if(!impDados.length && $('imp_texto').value.trim()) impDados=parseCSV($('imp_texto').value);
+      if(!impDados.length){ $('imp_res').className='msg falha'; $('imp_res').textContent='Nada para importar.'; return; }
+      $('imp_res').className='msg'; $('imp_res').textContent='Importando...'; $('imp_btn').disabled=true;
+      try{
+        var body={ contatos:impDados }; var lid=$('imp_lista').value; if(lid) body.lista_id=Number(lid);
+        const d=await api('/api/contatos?acao=lote',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+        $('imp_res').className='msg ok'; $('imp_res').textContent='Importados: '+d.importados+' | ignorados: '+d.ignorados;
+        impDados=[]; $('imp_texto').value=''; $('imp_file').value=''; mostrarPrevia();
+      }catch(e){ $('imp_res').className='msg falha'; $('imp_res').textContent='Erro: '+e.message; }
+      finally { $('imp_btn').disabled=false; }
+    });
+
+    // ---- Config ----
+    var cfgAquecimentoAtivo = true; // estado local: true = aquecimento ON (padrao), false = numero quente
+
+    function cfgPayload() {
+      var quente = !cfgAquecimentoAtivo;
+      return {
+        intervalo_segundos:Number($('cfg_intervalo').value),
+        limite_diario:Number($('cfg_limite').value),
+        ia_variar:$('cfg_ia').checked,
+        janela_inicio: quente ? 0 : Number($('cfg_jini').value),
+        janela_fim: quente ? 24 : Number($('cfg_jfim').value),
+        aquecimento: cfgAquecimentoAtivo
+      };
+    }
+
+    function atualizarBotaoQuente() {
+      var btn = $('cfg_quente_btn');
+      var wrap = $('cfg_quente_wrap');
+      if (!cfgAquecimentoAtivo) {
+        // Numero quente ATIVO (aquecimento OFF)
+        btn.textContent = '✅ Quente — Desativar';
+        btn.style.background = '#c2410c';
+        btn.style.color = '#fff';
+        wrap.style.background = '#fff7ed';
+        wrap.style.borderColor = '#f97316';
+        $('cfg_limite').value = 0;
+        $('cfg_jini').value = 0;
+        $('cfg_jfim').value = 24;
+      } else {
+        // Numero em aquecimento (padrao)
+        btn.textContent = '🔥 Ativar Numero Quente';
+        btn.style.background = '#f97316';
+        btn.style.color = '#fff';
+        wrap.style.background = '#fff7ed';
+        wrap.style.borderColor = '#f97316';
+      }
+    }
+
+    $('cfg_quente_btn').addEventListener('click', async function(){
+      if (cfgAquecimentoAtivo) {
+        // Vai ATIVAR o modo quente: pede confirmacao de responsabilidade.
+        var ok = confirm('Ativar Numero Quente?\n\n• O teto diario sera removido e TODAS as mensagens da fila serao enviadas, distribuidas em 8 horas.\n• Ao confirmar, VOCE assume a responsabilidade pelo risco de bloqueio do numero.\n\nDica: salve os destinatarios na sua agenda e peca que salvem o seu numero — isso reduz muito a chance de banimento.');
+        if (!ok) return;
+      }
+      cfgAquecimentoAtivo = !cfgAquecimentoAtivo;
+      atualizarBotaoQuente();
+      $('cfg_res').className='msg'; $('cfg_res').textContent='Salvando...';
+      try{
+        await api('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(cfgPayload())});
+        $('cfg_res').className='msg ok';
+        $('cfg_res').textContent = cfgAquecimentoAtivo ? 'Aquecimento ativado — teto gradual de 20/dia aplicado.' : '🔥 Numero Quente ativado — toda a fila sera distribuida em 8 horas, sem teto diario (responsabilidade assumida).';
+      }catch(e){ $('cfg_res').className='msg falha'; $('cfg_res').textContent='Erro: '+e.message; cfgAquecimentoAtivo=!cfgAquecimentoAtivo; atualizarBotaoQuente(); }
+    });
+
+    async function carregarConfig(){
+      try{
+        const c=await api('/api/config');
+        $('cfg_intervalo').value=c.intervalo_segundos;
+        $('cfg_limite').value=c.limite_diario;
+        $('cfg_ia').checked=!!c.ia_variar;
+        $('cfg_jini').value=c.janela_inicio;
+        $('cfg_jfim').value=c.janela_fim;
+        // aquecimento: true = modo normal, false = numero quente
+        cfgAquecimentoAtivo = c.aquecimento !== false;
+        atualizarBotaoQuente();
+      }catch(e){}
+    }
+    $('cfg_btn').addEventListener('click', async function(){
+      $('cfg_res').className='msg'; $('cfg_res').textContent='Salvando...';
+      try{ await api('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(cfgPayload())});
+        $('cfg_res').className='msg ok'; $('cfg_res').textContent='Salvo.';
+      }catch(e){ $('cfg_res').className='msg falha'; $('cfg_res').textContent='Erro: '+e.message; }
+    });
+    atualizarBotaoQuente();
+
+    if (getTok()) { api('/api/sessao').then(entrar).catch(function(){ sair(); }); }
+
+    // PWA: registra o service worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function(){ navigator.serviceWorker.register('/sw.js').catch(function(){}); });
+    }
+  </script>
+</body>
+</html>

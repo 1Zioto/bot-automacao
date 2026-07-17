@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>AutoFlow Chat</title>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#128c7e">
+  <link rel="icon" type="image/png" href="/icon-192.png">
+  <style>
+    :root { 
+      --bg:#efeae2; --panel:#fff; --text:#111b21; --text-muted:#667781; 
+      --border:#d1d7db; --accent:#008069; --accent-hover:#00a884;
+      --msg-in:#fff; --msg-out:#d9fdd3; --sys-msg:#e1f0fa;
+      --nav-bg:#f0f2f5; --active-bg:#f5f6f6;
+    }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { height:100vh; overflow:hidden; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+    button,input,textarea { font:inherit; }
+    
+    /* Login */
+    #auth { width:min(400px,calc(100% - 28px)); margin:8vh auto 0; background:#fff; border:1px solid var(--border); border-radius:10px; padding:22px; box-shadow:0 16px 40px rgba(11,20,26,.08); }
+    .logo-login { display:block; width:min(240px,80%); margin:0 auto 14px; }
+    h1 { margin:0 0 10px; font-size:22px; }
+    .muted { color:var(--text-muted); font-size:14px; }
+    label { display:grid; gap:5px; margin:12px 0; color:var(--text-muted); font-size:14px; }
+    input,textarea { width:100%; border:1px solid var(--border); border-radius:8px; padding:10px 12px; background:#fff; color:var(--text); }
+    .acao { border:0; border-radius:8px; padding:11px 16px; background:var(--accent); color:#fff; font-weight:700; cursor:pointer; margin-top:10px; width:100%; }
+    .link { border:0; background:none; color:var(--accent); cursor:pointer; text-decoration:underline; padding:0; }
+    .msg { min-height:18px; font-size:14px; margin-top:10px; } .falha { color:#ea0038; } .ok { color:var(--accent); }
+    
+    #app { display:none; height:100vh; }
+    .layout { display:flex; height:100%; width:100%; }
+    
+    /* App Navigation (Far Left) */
+    .app-nav { width:64px; background:var(--nav-bg); border-right:1px solid var(--border); display:flex; flex-direction:column; align-items:center; padding:12px 0; gap:20px; flex-shrink:0; z-index:10; }
+    .nav-icon { width:40px; height:40px; border-radius:50%; display:grid; place-items:center; cursor:pointer; color:#54656f; position:relative; }
+    .nav-icon:hover { background:rgba(11,20,26,.05); }
+    .nav-icon.active { background:#e9edef; }
+    .nav-badge { position:absolute; top:4px; right:4px; background:#25d366; color:#fff; font-size:10px; font-weight:bold; border-radius:10px; padding:2px 5px; min-width:18px; text-align:center; }
+    .nav-bottom { margin-top:auto; display:flex; flex-direction:column; gap:16px; align-items:center; }
+    .nav-avatar { width:32px; height:32px; border-radius:50%; background:#dfe5ee; overflow:hidden; }
+    .nav-avatar img { width:100%; height:100%; object-fit:cover; }
+    
+    /* Chat List Panel */
+    .chat-list-pane { width:380px; background:#fff; display:flex; flex-direction:column; flex-shrink:0; border-right:1px solid var(--border); position:relative; }
+    .chat-list-header { padding:16px; display:flex; justify-content:space-between; align-items:center; }
+    .chat-list-header h2 { font-size:22px; font-weight:700; color:#111b21; }
+    .chat-list-actions { display:flex; gap:16px; color:#54656f; cursor:pointer; }
+    
+    .chat-search-wrap { padding:8px 12px; }
+    .chat-search-box { background:var(--nav-bg); border-radius:8px; display:flex; align-items:center; padding:0 12px; height:36px; gap:12px; }
+    .chat-search-box input { border:none; background:transparent; width:100%; outline:none; padding:0; font-size:14px; color:#3b4a54; }
+    
+    .chat-filters { padding:4px 16px 12px; display:flex; gap:8px; align-items:center; overflow-x:auto; }
+    .chat-filters::-webkit-scrollbar { display:none; }
+    .filter-btn { padding:6px 14px; border-radius:16px; border:none; background:var(--nav-bg); color:#54656f; font-size:14px; cursor:pointer; white-space:nowrap; }
+    .filter-btn.active { background:#d1f4cc; color:#0f5132; }
+    
+    .chat-live { padding:8px 16px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; font-size:12px; color:var(--text-muted); background:#f9fafb; }
+    .chat-status { font-weight:bold; } .chat-status.ok { color:var(--accent); } .chat-status.warn { color:#b45309; }
+    .chat-connect { padding:10px; background:#fff7ed; color:#9a3412; font-size:13px; text-align:center; display:none; }
+    
+    .chat-list { flex:1; overflow-y:auto; }
+    .chat-item { display:flex; align-items:center; padding:0 12px; height:72px; cursor:pointer; transition:background 0.2s; }
+    .chat-item:hover { background:var(--nav-bg); }
+    .chat-item.ativo { background:var(--active-bg); }
+    .chat-item-avatar { width:48px; height:48px; border-radius:50%; background:#dfe5ee; flex-shrink:0; margin-right:12px; overflow:hidden; }
+    .chat-item-avatar img { width:100%; height:100%; object-fit:cover; }
+    .chat-item-content { flex:1; min-width:0; display:flex; flex-direction:column; justify-content:center; height:100%; border-bottom:1px solid var(--border); padding-right:4px; }
+    .chat-item:last-child .chat-item-content { border-bottom:none; }
+    .chat-item-top { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:2px; }
+    .chat-item-name { font-size:17px; color:#111b21; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .chat-item-time { font-size:12px; color:var(--text-muted); flex-shrink:0; }
+    .chat-item-bottom { display:flex; align-items:center; gap:4px; }
+    .chat-item-last { font-size:14px; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; }
+    
+    /* Main Chat Window */
+    .chat-window { flex:1; display:flex; flex-direction:column; min-width:0; position:relative; background-color:var(--bg); }
+    .chat-bg { position:absolute; inset:0; z-index:0; opacity:0.4; background-image:url('https://web.whatsapp.com/img/bg-chat-tile-dark_a4be512e7195b6b733d9110b408f075d.png'); background-size:400px; }
+    .chat-empty { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:1; background:var(--nav-bg); }
+    .chat-empty-img { width:320px; opacity:0.8; margin-bottom:30px; }
+    .chat-empty h2 { color:#41525d; font-weight:300; font-size:32px; margin-bottom:16px; }
+    .chat-empty p { color:var(--text-muted); font-size:14px; }
+    
+    .chat-head { height:60px; padding:10px 16px; background:var(--nav-bg); display:flex; align-items:center; justify-content:space-between; z-index:1; border-bottom:1px solid var(--border); }
+    .chat-head-user { display:flex; align-items:center; gap:12px; cursor:pointer; flex:1; }
+    .chat-head-avatar { width:40px; height:40px; border-radius:50%; background:#dfe5ee; overflow:hidden; }
+    .chat-head-info { display:flex; flex-direction:column; }
+    .chat-head-info h3 { margin:0; font-size:16px; color:#111b21; font-weight:500; }
+    .chat-head-info span { font-size:13px; color:var(--text-muted); }
+    .chat-head-actions { display:flex; gap:20px; color:#54656f; cursor:pointer; align-items:center; }
+    
+    .chat-messages { flex:1; overflow-y:auto; padding:20px 6%; display:flex; flex-direction:column; gap:8px; z-index:1; }
+    .chat-bubble { max-width:65%; padding:6px 7px 8px 9px; border-radius:8px; font-size:14.2px; line-height:19px; position:relative; box-shadow:0 1px 0.5px rgba(11,20,26,.13); }
+    .chat-bubble.sent { align-self:flex-end; background:var(--msg-out); border-top-right-radius:0; }
+    .chat-bubble.received { align-self:flex-start; background:var(--msg-in); border-top-left-radius:0; }
+    .chat-bubble.pending { opacity:0.8; }
+    .chat-bubble.error { outline:1px solid #ea0038; }
+    
+    /* Tail element for bubbles */
+    .chat-bubble.sent::before { content:''; position:absolute; top:0; right:-8px; width:8px; height:13px; background:radial-gradient(circle at 100% 100%, transparent 8px, var(--msg-out) 8px); }
+    .chat-bubble.received::before { content:''; position:absolute; top:0; left:-8px; width:8px; height:13px; background:radial-gradient(circle at 0% 100%, transparent 8px, var(--msg-in) 8px); }
+    
+    .chat-content { position:relative; overflow-wrap:break-word; white-space:pre-wrap; padding-bottom:12px; }
+    .chat-meta { position:absolute; bottom:-4px; right:0; display:flex; align-items:center; gap:4px; font-size:11px; color:var(--text-muted); }
+    .chat-bubble.sent .chat-meta { color:var(--text-muted); }
+    
+    .chat-status-icon { color:#53bdeb; display:flex; align-items:center; } /* Blue tick for sent */
+    
+    .chat-compose { min-height:62px; background:var(--nav-bg); padding:10px 16px; display:flex; align-items:flex-end; gap:12px; z-index:1; }
+    .compose-icon { width:40px; height:42px; display:flex; align-items:center; justify-content:center; color:#54656f; cursor:pointer; flex-shrink:0; }
+    .compose-input-wrap { flex:1; background:#fff; border-radius:8px; display:flex; align-items:center; min-height:42px; padding:0 16px; }
+    .compose-input-wrap textarea { width:100%; max-height:120px; border:none; outline:none; background:transparent; font-size:15px; resize:none; padding:11px 0; font-family:inherit; color:var(--text); }
+    .chat-send-state { position:absolute; bottom:70px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.6); color:#fff; padding:6px 12px; border-radius:16px; font-size:12px; z-index:2; transition:opacity 0.3s; opacity:0; pointer-events:none; }
+    .chat-send-state.show { opacity:1; }
+    
+    .chat-img { max-width:100%; max-height:280px; border-radius:6px; cursor:pointer; margin-bottom:4px; display:block; object-fit:cover; }
+    .chat-audio { width:260px; max-width:100%; margin-bottom:4px; }
+    .chat-file { display:flex; align-items:center; gap:10px; background:rgba(0,0,0,0.05); padding:10px; border-radius:6px; text-decoration:none; color:inherit; margin-bottom:4px; }
+    .chat-file-icon { width:32px; height:32px; background:#ea0038; color:#fff; border-radius:4px; display:grid; place-items:center; font-size:12px; font-weight:bold; }
+    
+    .media-modal { display:none; position:fixed; inset:0; background:rgba(11,20,26,.9); z-index:100; place-items:center; padding:20px; }
+    .media-modal img { max-width:94vw; max-height:90vh; border-radius:4px; }
+    
+    @media(max-width:860px){
+      .app-nav { display:none; }
+      .layout { flex-direction:column; }
+      .chat-list-pane { width:100%; height:40vh; border-right:none; border-bottom:1px solid var(--border); }
+      .chat-window { height:60vh; }
+      .chat-bubble { max-width:85%; }
+    }
+  </style>
+</head>
+<body>
+  <main id="auth">
+    <img src="/logo.png" alt="AutoFlow" class="logo-login" onerror="this.style.display='none'">
+    <h1 id="auth_titulo">Entrar</h1>
+    <p class="muted">Acesse sua conta para ver e responder mensagens.</p>
+    <label id="lbl_nome" style="display:none">Nome<input id="a_nome" type="text" placeholder="Seu nome"></label>
+    <label>Email<input id="a_email" type="email" placeholder="voce@email.com"></label>
+    <label>Senha<input id="a_senha" type="password" placeholder="senha"></label>
+    <button id="a_btn" class="acao">Entrar</button>
+    <p id="a_res" class="msg"></p>
+    <p class="muted"><span id="a_toggle_txt">Nao tem conta?</span> <button id="a_toggle" class="link">Criar conta</button></p>
+  </main>
+
+  <div id="app">
+    <div class="layout">
+      <!-- Nav Menu (Far left) -->
+      <nav class="app-nav">
+        <div class="nav-icon active" title="Conversas">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M12 2C6.477 2 2 6.14 2 11.25c0 2.871 1.488 5.433 3.824 7.108.204.147.345.362.391.603l.366 1.91c.071.37.452.576.793.43l2.096-.9c.231-.099.496-.109.734-.029 1.163.393 2.443.608 3.796.608 5.523 0 10-4.14 10-9.25C24 6.14 19.523 2 12 2z"></path></svg>
+          <span class="nav-badge" id="nav_badge" style="display:none">0</span>
+        </div>
+        <div class="nav-icon" title="Chamadas">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M21.384 17.752a2.108 2.108 0 0 1-.522 3.359 7.543 7.543 0 0 1-5.476 1.192 22.95 22.95 0 0 1-8.528-4.225 22.95 22.95 0 0 1-5.72-7.25 7.543 7.543 0 0 1-.226-5.602 2.108 2.108 0 0 1 2.92-1.214l3.189 1.595a2.108 2.108 0 0 1 1.05 1.542l.332 2.658a2.108 2.108 0 0 1-.606 1.636l-1.802 1.802a16.29 16.29 0 0 0 6.643 6.643l1.802-1.802a2.108 2.108 0 0 1 1.636-.606l2.658.332a2.108 2.108 0 0 1 1.542 1.05l1.595 3.189z"></path></svg>
+        </div>
+        <div class="nav-icon" title="Status">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M12 2.75a9.25 9.25 0 1 0 0 18.5 9.25 9.25 0 0 0 0-18.5zM1.25 12a10.75 10.75 0 1 1 21.5 0 10.75 10.75 0 0 1-21.5 0z"></path></svg>
+        </div>
+        
+        <div class="nav-bottom">
+          <div class="nav-icon" title="Configurações">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"></path><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.06-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.73 8.87a.49.49 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.06.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .43-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"></path></svg>
+          </div>
+          <div class="nav-avatar" title="Sair do Perfil" id="btn_sair" style="cursor:pointer;">
+            <img src="/logo.png" alt="Perfil" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\'><path fill=\'%23dfe5ee\' d=\'M0 0h24v24H0z\'/></svg>'">
+          </div>
+        </div>
+      </nav>
+
+      <!-- Chat List Panel -->
+      <aside class="chat-list-pane">
+        <div class="chat-list-header">
+          <h2>Conversas</h2>
+          <div class="chat-list-actions">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M19.005 3.175H4.674C3.642 3.175 3 3.789 3 4.821V21.02l3.544-3.514h12.461c1.033 0 2.064-1.06 2.064-2.093V4.821c-.001-1.032-1.032-1.646-2.064-1.646zm-4.989 9.869H7.041V11.1h6.975v1.944zm3.014-3.141H7.041V7.959h10.015v1.944z"></path></svg>
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M12 7a2 2 0 1 0-.001-4.001A2 2 0 0 0 12 7zm0 2a2 2 0 1 0-.001 3.999A2 2 0 0 0 12 9zm0 6a2 2 0 1 0-.001 3.999A2 2 0 0 0 12 15z"></path></svg>
+          </div>
+        </div>
+        
+        <div class="chat-search-wrap">
+          <div class="chat-search-box">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="#54656f"><path d="M15.009 13.805h-.636l-.22-.219a5.184 5.184 0 0 0 1.256-3.386 5.207 5.207 0 1 0-5.207 5.208 5.183 5.183 0 0 0 3.385-1.255l.221.22v.635l4.004 3.999 1.194-1.195-3.997-4.007zm-4.808 0a3.605 3.605 0 1 1 0-7.21 3.605 3.605 0 0 1 0 7.21z"></path></svg>
+            <input id="chat_pesquisa" type="search" placeholder="Pesquisar ou começar uma nova conversa">
+          </div>
+        </div>
+        
+        <div class="chat-filters">
+          <button class="filter-btn active">Tudo</button>
+          <button class="filter-btn">Não lidas <span id="badge_unread" style="display:none">0</span></button>
+          <button class="filter-btn">Grupos</button>
+          <button class="filter-btn" style="padding:6px 10px; display:flex; align-items:center;">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19 11h-6V5h-2v6H5v2h6v6h2v-6h6z"></path></svg>
+          </button>
+        </div>
+        
+        <div class="chat-live">
+          <span id="chat_live_txt">Ao vivo</span>
+          <span id="chat_status_txt" class="chat-status warn">Verificando WhatsApp</span>
+        </div>
+        <div class="chat-connect" id="chat_connect_box">WhatsApp desconectado. Reconecte pelo painel principal.</div>
+        
+        <div class="chat-list" id="chat_lista">
+          <p class="muted" style="padding:20px;text-align:center">Carregando conversas...</p>
+        </div>
+      </aside>
+
+      <!-- Main Chat Window -->
+      <section class="chat-window" id="chat_janela">
+        <div class="chat-bg"></div>
+        <div class="chat-empty">
+          <h2>AutoFlow Web</h2>
+          <p>Envie e receba mensagens sem precisar manter seu celular conectado à internet.</p>
+          <p style="margin-top:20px; color:#8696a0; font-size:12px;">Use o painel principal para vincular dispositivos.</p>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div id="media_modal" class="media-modal" onclick="fecharMidia()">
+    <img id="media_modal_img" alt="Midia recebida">
+  </div>
+
+  <script>
+    function $(id){ return document.getElementById(id); }
+    function esc(s){ return String(s==null?'':s).replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];}); }
+    function getTok(){ return localStorage.getItem('token')||''; }
+    async function api(url, opts){
+      opts=opts||{};
+      opts.headers=Object.assign({ 'Authorization':'Bearer '+getTok() }, opts.headers||{});
+      const r=await fetch(url, opts);
+      const d=await r.json().catch(function(){ return {}; });
+      if(r.status===401 && url.indexOf('/api/auth')<0){ sair(); throw new Error('Sessao expirada.'); }
+      if(!r.ok) throw new Error(d.erro||'Erro');
+      return d;
+    }
+
+    var modo='login';
+    var contatosCache=[], mensagensCache=[], enviosCache=[], sessaoAtual=null, historicoCarregado={}, chatAtivoNumero=null, chatTimer=null, chatUltimoId=0, chatBuscaHistorico='';
+
+    $('a_toggle').addEventListener('click', function(){
+      modo=modo==='login'?'registro':'login';
+      $('auth_titulo').textContent=modo==='login'?'Entrar':'Criar conta';
+      $('a_btn').textContent=modo==='login'?'Entrar':'Criar conta';
+      $('lbl_nome').style.display=modo==='login'?'none':'grid';
+      $('a_toggle_txt').textContent=modo==='login'?'Nao tem conta?':'Ja tem conta?';
+      $('a_toggle').textContent=modo==='login'?'Criar conta':'Entrar';
+      $('a_res').textContent='';
+    });
+    $('a_btn').addEventListener('click', async function(){
+      const email=$('a_email').value.trim(), senha=$('a_senha').value;
+      $('a_res').className='msg'; $('a_res').textContent='Processando...'; $('a_btn').disabled=true;
+      try{
+        const body={ acao:modo, email, senha };
+        if(modo==='registro') body.nome=$('a_nome').value.trim();
+        const r=await fetch('/api/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+        const d=await r.json(); if(!r.ok) throw new Error(d.erro||'Erro');
+        localStorage.setItem('token', d.token); localStorage.setItem('email', d.usuario.email); entrar();
+      }catch(e){ $('a_res').className='msg falha'; $('a_res').textContent=e.message; }
+      finally{ $('a_btn').disabled=false; }
+    });
+
+    function entrar(){
+      $('auth').style.display='none'; $('app').style.display='block';
+      inicializarChat(); iniciarChatPoll();
+    }
+    function sair(){ pararChatPoll(); localStorage.removeItem('token'); $('app').style.display='none'; $('auth').style.display='block'; }
+    var btnSair = $('btn_sair'); if(btnSair) btnSair.addEventListener('click', function(){ if(confirm('Sair da conta?')) sair(); });
+
+    async function inicializarChat(){
+      await Promise.all([carregarContatosCache(), carregarMensagensCache(), carregarEnviosCache(), carregarSessao()]);
+      renderizarConversas();
+      if(chatAtivoNumero) abrirConversa(chatAtivoNumero);
+    }
+    function iniciarChatPoll(){
+      pararChatPoll();
+      chatTimer=setInterval(async function(){
+        if($('app').style.display==='none') return;
+        var antes=chatUltimoId;
+        await Promise.all([carregarMensagensCache(), carregarEnviosCache(), carregarSessao()]);
+        renderizarConversas();
+        if(chatAtivoNumero) abrirConversa(chatAtivoNumero, true);
+        var txt=$('chat_live_txt');
+        if(txt) {
+          txt.textContent=chatUltimoId>antes?'Novas mensagens':'Ao vivo';
+          if(chatUltimoId>antes) setTimeout(function(){ if($('chat_live_txt')) $('chat_live_txt').textContent='Ao vivo'; }, 1800);
+        }
+      }, 2000);
+    }
+    function pararChatPoll(){ if(chatTimer){ clearInterval(chatTimer); chatTimer=null; } }
+    async function carregarContatosCache(){ try{ contatosCache=await api('/api/contatos'); }catch(e){ contatosCache=[]; } }
+    function mesclarMensagens(novas){
+      var porId={};
+      mensagensCache.concat(novas||[]).forEach(function(m){ if(m && m.id!=null) porId[m.id]=m; });
+      mensagensCache=Object.values(porId);
+    }
+    async function carregarMensagensCache(){
+      try{
+        mesclarMensagens(await api('/api/mensagens?limite=1200'));
+        chatUltimoId=mensagensCache.reduce(function(max,m){ return Math.max(max, Number(m.id)||0); }, chatUltimoId||0);
+      }catch(e){ mensagensCache=[]; }
+    }
+    async function carregarHistoricoConversa(numero){
+      if(!numero || historicoCarregado[numero]) return;
+      historicoCarregado[numero]='carregando';
+      try{
+        var mais=await api('/api/mensagens?numero='+encodeURIComponent(numero)+'&limite=3000');
+        mesclarMensagens(mais);
+        historicoCarregado[numero]='ok';
+      }catch(e){ historicoCarregado[numero]='erro'; }
+    }
+    async function carregarEnviosCache(){ try{ enviosCache=await api('/api/envios?limite=300'); }catch(e){ enviosCache=[]; } }
+    async function carregarSessao(){
+      try{ sessaoAtual=await api('/api/sessao'); }catch(e){ sessaoAtual=null; }
+      atualizarStatusSessao();
+    }
+    function atualizarStatusSessao(){
+      var el=$('chat_status_txt'); if(!el) return;
+      var st=sessaoAtual && sessaoAtual.status;
+      var pronto=st==='pronto';
+      el.className='chat-status '+(pronto?'ok':'warn');
+      el.textContent=pronto?'WhatsApp conectado':'WhatsApp '+(st||'desconectado');
+      var box=$('chat_connect_box'); if(!box) return;
+      box.style.display=pronto?'none':'block';
+    }
+    function nomeHumano(valor){
+      var n=String(valor||'').trim();
+      if(/^contato whatsapp$/i.test(n)) return '';
+      if(!n || n.indexOf('@lid')>0 || n.indexOf('@g.us')>0 || /^\d{10,}$/.test(n)) return '';
+      return n;
+    }
+    function msgUtil(m){ return !!(String(m&&m.corpo||'').trim() || (m&&m.media_mimetype)); }
+    function idCurto(numero){ var dig=String(numero||'').replace(/\D/g,''); return dig ? dig.slice(-4) : ''; }
+    function numeroVisivel(numero){
+      var n=String(numero||'');
+      if(n.indexOf('@lid')>0) return 'Contato '+idCurto(n);
+      if(n.indexOf('@g.us')>0) return 'Grupo WhatsApp';
+      if(n.indexOf('@c.us')>0) return n.replace('@c.us','');
+      return n;
+    }
+    function nomeContato(numero){
+      var msg=mensagensCache.find(function(m){ return m.numero===numero && m.contato_nome; });
+      if(msg && nomeHumano(msg.contato_nome)) return msg.contato_nome;
+      var c=contatosCache.find(function(x){ return x.numero===numero; });
+      return c && nomeHumano(c.nome) ? c.nome : numeroVisivel(numero);
+    }
+    function fmtHoraCurta(d){ try{ return new Date(d).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}); }catch(e){ return ''; } }
+    function fmtHoraHeader(d){ try{ return 'hoje às ' + new Date(d).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}); }catch(e){ return ''; } }
+    function escRegex(s){ return String(s||'').replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
+    function destacarTexto(texto, termo){
+      var seguro=esc(texto); termo=String(termo||'').trim();
+      if(!termo) return seguro;
+      return seguro.replace(new RegExp('('+escRegex(esc(termo))+')','ig'), '<mark style="background:#fef08a;border-radius:2px;padding:0 2px;">$1</mark>');
+    }
+    function resumoMensagem(m){
+      var icon = m.direcao==='enviada' ? (m.status==='pendente'?'<span style="font-size:10px;">🕒</span> ':'<span style="color:#53bdeb;">✓✓</span> ') : '';
+      var prefix = icon;
+      if(m.corpo) return prefix + m.corpo;
+      if(m.media_mimetype && m.media_mimetype.indexOf('image/')===0) return prefix + '📷 Foto';
+      if(m.media_mimetype && m.media_mimetype.indexOf('audio/')===0) return prefix + '🎤 Áudio';
+      if(m.media_mimetype && m.media_mimetype.indexOf('video/')===0) return prefix + '🎥 Vídeo';
+      if(m.media_mimetype) return prefix + '📄 Arquivo';
+      return prefix;
+    }
+    function enviosPendentesDaConversa(numero){
+      return enviosCache.filter(function(e){
+        return e.numero===numero && e.origem==='chat' && (e.status==='pendente' || e.status==='erro');
+      }).map(function(e){
+        return { id:'envio-'+e.id, numero:e.numero, direcao:'enviada', corpo:e.mensagem, status:e.status, origem:'chat', erro:e.erro, criado_em:e.criado_em, envio:true };
+      });
+    }
+    function renderizarConversas(){
+      var termo=$('chat_pesquisa').value.toLowerCase().trim();
+      var chats={};
+      mensagensCache.filter(msgUtil).forEach(function(m){
+        var num=m.numero;
+        if(!chats[num]) chats[num]={numero:num,nome:nomeContato(num),ultimo:m};
+        if(new Date(m.criado_em)>new Date(chats[num].ultimo.criado_em)) chats[num].ultimo=m;
+      });
+      if(termo){
+        contatosCache.forEach(function(c){
+          if(!chats[c.numero] && (String(c.nome).toLowerCase().indexOf(termo)>=0 || String(c.numero).indexOf(termo)>=0)){
+            chats[c.numero]={numero:c.numero,nome:c.nome,ultimo:null};
+          }
+        });
+      }
+      var lista=Object.values(chats).sort(function(a,b){
+        if(!a.ultimo) return 1; if(!b.ultimo) return -1;
+        return new Date(b.ultimo.criado_em)-new Date(a.ultimo.criado_em);
+      }).filter(function(c){ return !termo || c.nome.toLowerCase().indexOf(termo)>=0 || c.numero.indexOf(termo)>=0; });
+      
+      $('chat_lista').innerHTML=lista.map(function(c){
+        var ativo=chatAtivoNumero===c.numero?' ativo':'';
+        var avatarSvg = '<svg viewBox="0 0 24 24" width="28" height="28" fill="#fff"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"></path></svg>';
+        
+        return '<div class="chat-item'+ativo+'" data-numero="'+esc(c.numero)+'">'+
+          '<div class="chat-item-avatar">'+avatarSvg+'</div>'+
+          '<div class="chat-item-content">'+
+            '<div class="chat-item-top"><span class="chat-item-name">'+esc(c.nome)+'</span><span class="chat-item-time">'+(c.ultimo?fmtHoraCurta(c.ultimo.criado_em):'')+'</span></div>'+
+            '<div class="chat-item-bottom"><span class="chat-item-last">'+(c.ultimo?resumoMensagem(c.ultimo):'Conversa sem mensagens')+'</span></div>'+
+          '</div></div>';
+      }).join('') || '<div style="display:flex;flex-direction:column;align-items:center;padding:40px 20px;color:var(--text-muted);text-align:center;"><svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor" style="opacity:0.5;margin-bottom:16px;"><path d="M15.009 13.805h-.636l-.22-.219a5.184 5.184 0 0 0 1.256-3.386 5.207 5.207 0 1 0-5.207 5.208 5.183 5.183 0 0 0 3.385-1.255l.221.22v.635l4.004 3.999 1.194-1.195-3.997-4.007zm-4.808 0a3.605 3.605 0 1 1 0-7.21 3.605 3.605 0 0 1 0 7.21z"></path></svg><p>Nenhuma conversa encontrada</p></div>';
+      
+      $('chat_lista').querySelectorAll('.chat-item').forEach(function(el){ el.addEventListener('click', function(){ abrirConversa(el.dataset.numero); }); });
+    }
+    
+    function abrirConversa(numero, preservarScroll){
+      chatAtivoNumero=numero;
+      if(!historicoCarregado[numero]){
+        carregarHistoricoConversa(numero).then(function(){ if(chatAtivoNumero===numero) abrirConversa(numero, true); });
+      }
+      document.querySelectorAll('.chat-item').forEach(function(x){ x.classList.toggle('ativo', x.dataset.numero===numero); });
+      
+      var msgs=mensagensCache.filter(function(m){ return m.numero===numero && msgUtil(m); }).concat(enviosPendentesDaConversa(numero)).sort(function(a,b){ return new Date(a.criado_em)-new Date(b.criado_em); });
+      var termoHist=chatBuscaHistorico.trim().toLowerCase();
+      var msgsFiltradas=termoHist ? msgs.filter(function(m){ return String(m.corpo||'').toLowerCase().indexOf(termoHist)>=0 || String(m.media_filename||'').toLowerCase().indexOf(termoHist)>=0 || String(m.media_mimetype||'').toLowerCase().indexOf(termoHist)>=0; }) : msgs;
+      var nome=nomeContato(numero);
+      var carregandoHistorico=historicoCarregado[numero]==='carregando';
+      var avisoHistorico=carregandoHistorico?'<div style="text-align:center;margin:10px 0;"><span style="background:var(--nav-bg);padding:6px 12px;border-radius:12px;font-size:12px;color:var(--text-muted);">Carregando histórico...</span></div>':'';
+      
+      var avatarSvg = '<svg viewBox="0 0 24 24" width="24" height="24" fill="#fff"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"></path></svg>';
+      var ultimoAcesso = msgs.length > 0 ? fmtHoraHeader(msgs[msgs.length-1].criado_em) : '';
+      
+      var html='<div class="chat-bg"></div>'+
+        '<div class="chat-head">'+
+          '<div class="chat-head-user">'+
+            '<div class="chat-head-avatar" style="display:grid;place-items:center;">'+avatarSvg+'</div>'+
+            '<div class="chat-head-info"><h3>'+esc(nome)+'</h3><span>'+(ultimoAcesso ? 'visto por último '+ultimoAcesso : esc(numeroVisivel(numero)))+'</span></div>'+
+          '</div>'+
+          '<div class="chat-head-actions">'+
+            '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M21 6.5l-4 4v3l4 4v-11zM15 5H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2z"></path></svg>'+
+            '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M20.005 15.351a1.97 1.97 0 0 1-.49 3.151 7.072 7.072 0 0 1-5.137 1.118 21.523 21.523 0 0 1-7.997-3.962 21.522 21.522 0 0 1-5.364-6.799 7.073 7.073 0 0 1-.212-5.253 1.97 1.97 0 0 1 2.738-1.139l2.99 1.496a1.97 1.97 0 0 1 .985 1.446l.311 2.492a1.97 1.97 0 0 1-.568 1.534l-1.69 1.69a15.275 15.275 0 0 0 6.229 6.229l1.69-1.69a1.97 1.97 0 0 1 1.534-.568l2.492.311a1.97 1.97 0 0 1 1.446.985l1.496 2.99z"></path></svg>'+
+            '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" onclick="document.getElementById(\\'chat_hist_busca_wrap\\').style.display=\\'flex\\'"><path d="M15.009 13.805h-.636l-.22-.219a5.184 5.184 0 0 0 1.256-3.386 5.207 5.207 0 1 0-5.207 5.208 5.183 5.183 0 0 0 3.385-1.255l.221.22v.635l4.004 3.999 1.194-1.195-3.997-4.007zm-4.808 0a3.605 3.605 0 1 1 0-7.21 3.605 3.605 0 0 1 0 7.21z"></path></svg>'+
+            '<div id="chat_hist_busca_wrap" style="display:'+(termoHist?'flex':'none')+';position:absolute;right:16px;top:10px;background:#fff;border-radius:24px;padding:4px 12px;box-shadow:0 2px 5px rgba(0,0,0,0.1);align-items:center;z-index:10;"><input id="chat_hist_busca" type="search" placeholder="Buscar..." value="'+esc(chatBuscaHistorico)+'" style="border:none;outline:none;background:transparent;width:150px;font-size:14px;"><svg viewBox="0 0 24 24" width="18" height="18" fill="#54656f" style="cursor:pointer;" onclick="document.getElementById(\\'chat_hist_busca\\').value=\\'\\';document.getElementById(\\'chat_hist_busca\\').dispatchEvent(new Event(\\'input\\'));document.getElementById(\\'chat_hist_busca_wrap\\').style.display=\\'none\\'"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"></path></svg></div>'+
+          '</div>'+
+        '</div>'+
+        '<div class="chat-messages" id="chat_mensagens_box">'+avisoHistorico+
+        (msgsFiltradas.map(function(m){
+          var sent=m.direcao==='enviada', media='';
+          if(m.media_mimetype && m.media_disponivel){
+            var mediaUrl='/api/mensagens?id='+m.id+'&media=1&token='+encodeURIComponent(getTok());
+            if(m.media_mimetype.indexOf('image/')===0) media='<img class="chat-img" src="'+mediaUrl+'" onclick="abrirMidia(this.src)" alt="Imagem">';
+            else if(m.media_mimetype.indexOf('audio/')===0) media='<audio class="chat-audio" controls><source src="'+mediaUrl+'" type="'+esc(m.media_mimetype)+'"></audio>';
+            else if(m.media_mimetype.indexOf('video/')===0) media='<video controls class="chat-img"><source src="'+mediaUrl+'" type="'+esc(m.media_mimetype)+'">Video nao suportado</video>';
+            else { var fn=m.media_filename||'arquivo'; media='<a class="chat-file" href="'+mediaUrl+'" download="'+esc(fn)+'"><div class="chat-file-icon">DOC</div><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(fn)+'</div></a>'; }
+          } else if(m.media_mimetype) media='<div style="font-size:13px;color:var(--text-muted);padding:8px;background:rgba(0,0,0,0.05);border-radius:4px;margin-bottom:4px;">Mídia indisponível</div>';
+          
+          var checkIcon = m.status==='pendente' ? '<svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4v4l3 2" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>' : 
+                         (m.status==='erro' ? '<span style="color:#ea0038">!</span>' : '<svg viewBox="0 0 16 16" width="16" height="15" fill="currentColor"><path d="M10.97 4.97a.75.75 0 0 1 1.07 1.05l-3.99 4.99a.75.75 0 0 1-1.08.02L4.324 8.384a.75.75 0 1 1 1.06-1.06l2.094 2.093 3.473-4.425a.267.267 0 0 1 .02-.022z"/></svg>');
+          
+          var estadoHTML=sent ? '<span class="chat-status-icon" style="'+(m.status==='pendente'?'color:var(--text-muted)':'')+'">'+checkIcon+'</span>' : '';
+          var extraClasse=m.status==='pendente'?' pending':(m.status==='erro'?' error':'');
+          var hora = fmtHoraCurta(m.criado_em);
+          
+          var corpo = m.corpo ? destacarTexto(m.corpo, chatBuscaHistorico) : '';
+          
+          return '<div class="chat-bubble '+(sent?'sent':'received')+extraClasse+'">'+media+
+            '<div class="chat-content">'+corpo+'<div style="display:inline-block;width:'+(sent?'60px':'45px')+';height:10px;"></div></div>'+
+            '<div class="chat-meta"><span>'+hora+'</span>'+estadoHTML+'</div>'+
+            '</div>';
+        }).join('') || '<div style="text-align:center;margin-top:20px;"><span style="background:var(--nav-bg);padding:8px 16px;border-radius:16px;font-size:13px;color:var(--text-muted);box-shadow:0 1px 2px rgba(0,0,0,0.05);">'+(termoHist?'Nada encontrado':'Esta conversa não possui mensagens no sistema.')+'</span></div>')+
+        '</div>'+
+        '<div class="chat-send-state" id="chat_send_state"></div>'+
+        '<div class="chat-compose">'+
+          '<div class="compose-icon" title="Anexar"><svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M19 11h-6V5h-2v6H5v2h6v6h2v-6h6z"></path></svg></div>'+
+          '<div class="compose-input-wrap"><textarea id="chat_input" placeholder="Mensagem"></textarea></div>'+
+          '<div class="compose-icon" id="chat_send_btn_icon"><svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M11.999 14.942c2.001 0 3.531-1.53 3.531-3.531V4.35c0-2.001-1.53-3.531-3.531-3.531S8.469 2.349 8.469 4.35v7.061c0 2.001 1.53 3.531 3.531 3.531zm6.238-3.53c0 3.531-2.942 6.002-6.237 6.002s-6.237-2.471-6.237-6.002H3.761c0 4.001 3.178 7.297 7.061 7.885v3.884h2.354v-3.884c3.884-.588 7.061-3.884 7.061-7.885h-2.002z"></path></svg></div>'+
+          '<div class="compose-icon" id="chat_send" style="display:none;color:var(--accent);"><svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path></svg></div>'+
+        '</div>';
+        
+      var boxAnterior=$('chat_mensagens_box');
+      var estavaNoFim=!boxAnterior || (boxAnterior.scrollHeight-boxAnterior.scrollTop-boxAnterior.clientHeight<30);
+      $('chat_janela').innerHTML=html;
+      var box=$('chat_mensagens_box'); if(box && (!preservarScroll || estavaNoFim)) box.scrollTop=box.scrollHeight;
+      
+      var histBusca = $('chat_hist_busca');
+      if(histBusca) {
+        histBusca.addEventListener('input', function(){ chatBuscaHistorico=this.value; abrirConversa(chatAtivoNumero, true); var novo=$('chat_hist_busca'); if(novo){ novo.focus(); novo.setSelectionRange(novo.value.length, novo.value.length); } });
+      }
+      
+      var inp = $('chat_input');
+      var sendBtn = $('chat_send');
+      var micBtn = $('chat_send_btn_icon');
+      if(inp) {
+        inp.addEventListener('input', function(){
+          if(this.value.trim()){ micBtn.style.display='none'; sendBtn.style.display='flex'; }
+          else { micBtn.style.display='flex'; sendBtn.style.display='none'; }
+          
+          this.style.height = 'auto';
+          this.style.height = (this.scrollHeight) + 'px';
+        });
+        inp.addEventListener('keydown', function(e){ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); enviarMensagemChat(); } });
+      }
+      if(sendBtn) sendBtn.addEventListener('click', enviarMensagemChat);
+    }
+    
+    function showSendState(msg) {
+      var st = $('chat_send_state');
+      if(st) { st.textContent=msg; st.className='chat-send-state show'; setTimeout(function(){ st.className='chat-send-state'; }, 2000); }
+    }
+    
+    async function enviarMensagemChat(){
+      var input=$('chat_input'), mensagem=input?input.value.trim():'';
+      if(!mensagem || !chatAtivoNumero) return;
+      input.value=''; input.dispatchEvent(new Event('input')); input.disabled=true; 
+      var sendBtn = $('chat_send'); if(sendBtn) sendBtn.style.pointerEvents='none';
+      try{
+        await api('/api/envios',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({numero:chatAtivoNumero,mensagem:mensagem,origem:'chat'})});
+        await Promise.all([carregarMensagensCache(), carregarEnviosCache(), carregarSessao()]);
+        renderizarConversas(); abrirConversa(chatAtivoNumero);
+      }catch(e){
+        showSendState('Erro ao enviar');
+        input.value=mensagem; input.dispatchEvent(new Event('input'));
+      }
+      finally{ input.disabled=false; if(sendBtn) sendBtn.style.pointerEvents='auto'; input.focus(); }
+    }
+    $('chat_pesquisa').addEventListener('input', renderizarConversas);
+    function abrirMidia(src){ $('media_modal_img').src=src; $('media_modal').style.display='grid'; }
+    function fecharMidia(){ $('media_modal').style.display='none'; $('media_modal_img').src=''; }
+    if(getTok()) api('/api/mensagens?limite=1').then(entrar).catch(sair);
+    if('serviceWorker' in navigator) window.addEventListener('load', function(){ navigator.serviceWorker.register('/sw.js').catch(function(){}); });
+  </script>
+</body>
+</html>
