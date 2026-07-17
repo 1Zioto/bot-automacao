@@ -1,0 +1,14 @@
+packages:
+  - apps/*
+  - packages/*
+
+allowBuilds:
+  argon2: true
+  esbuild: true
+  msgpackr-extract: true
+  puppeteer: true
+
+onlyBuiltDependencies:
+  - argon2
+  - esbuild
+  - puppeteer

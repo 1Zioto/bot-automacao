@@ -1,0 +1,28 @@
+{
+  "name": "@autoflow/queue-worker",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@autoflow/config": "workspace:*",
+    "@autoflow/database": "workspace:*",
+    "@autoflow/events": "workspace:*",
+    "@autoflow/logger": "workspace:*",
+    "@autoflow/queue": "workspace:*",
+    "@autoflow/security": "workspace:*",
+    "@autoflow/shared": "workspace:*",
+    "bullmq": "^5.58.5"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "tsx": "^4.20.5",
+    "typescript": "~5.9.2"
+  }
+}

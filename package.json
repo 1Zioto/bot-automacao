@@ -1,0 +1,22 @@
+{
+  "name": "autoflow-saas",
+  "version": "2.0.0",
+  "private": true,
+  "packageManager": "pnpm@11.9.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "pnpm -r --if-present build",
+    "check": "pnpm -r --if-present check",
+    "test": "pnpm -r --if-present test",
+    "db:migrate": "pnpm --filter @autoflow/database migrate",
+    "dev:api": "pnpm --filter @autoflow/api dev",
+    "dev:whatsapp": "pnpm --filter @autoflow/whatsapp-worker dev",
+    "dev:queue": "pnpm --filter @autoflow/queue-worker dev"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "typescript": "~5.9.2"
+  }
+}
