@@ -1,5 +1,5 @@
 import { hostname } from 'node:os';
-import { Client, LocalAuth, type Message } from 'whatsapp-web.js';
+import whatsappWeb, { type Client, type Message } from 'whatsapp-web.js';
 import QRCode from 'qrcode';
 import { getEnvironment } from '@autoflow/config';
 import { query } from '@autoflow/database';
@@ -8,6 +8,8 @@ import { createLogger } from '@autoflow/logger';
 import { DistributedLock, getRedis } from '@autoflow/queue';
 import { encryptText } from '@autoflow/security';
 import { maskPhoneNumber, normalizePhoneNumber } from '@autoflow/shared';
+
+const { Client, LocalAuth } = whatsappWeb;
 
 interface InstanceRow {
   id: string;
