@@ -29,19 +29,8 @@ router.post('/', authenticateApiKey('messages:write'), async (req, res, next) =>
     const encrypted = encryptText(input.text);
 
     const message = await transaction(async (client) => {
-      const existing = await client.query<{ id: string; status: string; instance_id: string }>(
-        'SELECT id, status, instance_id FROM messages WHERE tenant_id = $1 AND idempotency_key = $2',
-        [auth.tenantId, idempotencyKey],
-      );
-      if (existing.rows[0]) {
-        if (existing.rows[0].instance_id !== input.instanceId) {
-          throw new AppError('IDEMPOTENCY_CONFLICT', 'A chave de idempotencia ja foi usada com outro envio.', 409);
-        }
-        return existing.rows[0];
-      }
-
-      const instance = await client.query<{ id: string; sending_enabled: boolean }>(
-        `SELECT id, sending_enabled
+      const instance = await client.query<{ id: string; sending_enabled: boolean; status: string }>(
+        `SELECT id, sending_enabled, status
          FROM whatsapp_instances
          WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL`,
         [input.instanceId, auth.tenantId],
@@ -51,6 +40,38 @@ router.post('/', authenticateApiKey('messages:write'), async (req, res, next) =>
       }
       if (!instance.rows[0].sending_enabled) {
         throw new AppError('INSTANCE_SENDING_DISABLED', 'Instancia WhatsApp desabilitada para envio no painel.', 409);
+      }
+      let effectiveInstanceId = input.instanceId;
+      if (instance.rows[0].status !== 'READY') {
+        const readyInstance = await client.query<{ id: string }>(
+          `SELECT id FROM whatsapp_instances
+           WHERE tenant_id = $1 AND deleted_at IS NULL AND sending_enabled = true AND status = 'READY'
+           LIMIT 1`,
+          [auth.tenantId],
+        );
+        if (readyInstance.rows[0]) {
+          effectiveInstanceId = readyInstance.rows[0].id;
+        }
+      }
+
+      const existing = await client.query<{ id: string; status: string; instance_id: string }>(
+        'SELECT id, status, instance_id FROM messages WHERE tenant_id = $1 AND idempotency_key = $2',
+        [auth.tenantId, idempotencyKey],
+      );
+      if (existing.rows[0]) {
+        if (existing.rows[0].status === 'FAILED') {
+          const requeued = await client.query<{ id: string; status: string; instance_id: string }>(
+            `UPDATE messages
+             SET status = 'QUEUED', error_code = NULL, instance_id = $3,
+                 content_ciphertext = $4, content_iv = $5, content_tag = $6,
+                 updated_at = now()
+             WHERE id = $1 AND tenant_id = $2
+             RETURNING id, status, instance_id`,
+            [existing.rows[0].id, auth.tenantId, effectiveInstanceId, encrypted.ciphertext, encrypted.iv, encrypted.tag],
+          );
+          return requeued.rows[0]!;
+        }
+        return existing.rows[0];
       }
 
       let targetContactId: string | null = null;
@@ -111,7 +132,7 @@ router.post('/', authenticateApiKey('messages:write'), async (req, res, next) =>
             content_ciphertext, content_iv, content_tag, idempotency_key, recipient_phone_snapshot)
          VALUES ($1, $2, $3, 'OUTBOUND', 'TEXT', 'QUEUED', $4, $5, $6, $7, $8)
          RETURNING id, status, instance_id`,
-        [auth.tenantId, input.instanceId, targetContactId, encrypted.ciphertext, encrypted.iv, encrypted.tag, idempotencyKey, targetPhoneNumber],
+        [auth.tenantId, effectiveInstanceId, targetContactId, encrypted.ciphertext, encrypted.iv, encrypted.tag, idempotencyKey, targetPhoneNumber],
       );
       return inserted.rows[0]!;
     });

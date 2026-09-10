@@ -262,29 +262,33 @@ export class InstanceManager {
   async sendText(instanceId: string, phoneNumber: string, content: string, idempotencyKey: string): Promise<string> {
     const managed = this.instances.get(instanceId);
     if (!managed?.ready) throw new Error('Instancia nao esta pronta neste worker.');
-    const destination = `${normalizePhoneNumber(phoneNumber)}@c.us`;
+    const cleanNumber = normalizePhoneNumber(phoneNumber);
+    let destination = `${cleanNumber}@c.us`;
     const sentAfter = Math.floor(Date.now() / 1000) - 2;
 
-    // Verificar se o numero esta registrado no WhatsApp antes de tentar enviar
-    // para evitar o erro interno "Cannot read properties of undefined (reading 'getChat')"
-    // que o whatsapp-web.js lanca quando o contato nao existe.
+    // Obter o ID real registrado no WhatsApp para evitar erros com o 9o digito no Brasil
+    // e o erro interno "Cannot read properties of undefined (reading 'getChat')"
     try {
-      const isRegistered = await managed.client.isRegisteredUser(destination);
-      if (!isRegistered) {
-        throw new Error(`Numero ${maskPhoneNumber(phoneNumber)} nao esta registrado no WhatsApp.`);
+      const numberId = await managed.client.getNumberId(cleanNumber);
+      if (numberId?._serialized) {
+        destination = numberId._serialized;
+      } else if (cleanNumber.startsWith('55') && cleanNumber.length === 13) {
+        const withoutNine = cleanNumber.slice(0, 4) + cleanNumber.slice(5);
+        const altId = await managed.client.getNumberId(withoutNine);
+        if (altId?._serialized) destination = altId._serialized;
+      } else if (cleanNumber.startsWith('55') && cleanNumber.length === 12) {
+        const withNine = cleanNumber.slice(0, 4) + '9' + cleanNumber.slice(4);
+        const altId = await managed.client.getNumberId(withNine);
+        if (altId?._serialized) destination = altId._serialized;
       }
     } catch (err: any) {
-      // Se isRegisteredUser falhar (sessao instavel), prosseguir e deixar o sendMessage tentar
-      if (err.message?.includes('nao esta registrado')) throw err;
-      logger.warn({ instanceId, err: err.message }, 'Nao foi possivel verificar registro do numero; tentando enviar mesmo assim');
+      logger.warn({ instanceId, err: err.message }, 'Nao foi possivel resolver numberId no WhatsApp; tentando envio direto');
     }
 
     let sent: any;
     try {
       sent = await managed.client.sendMessage(destination, content);
     } catch (err: any) {
-      // O whatsapp-web.js lanca "Cannot read properties of undefined (reading 'getChat')"
-      // quando o numero nao tem conta ativa no WhatsApp. Transformamos em erro legivel.
       if (err?.message?.includes("'getChat'") || err?.message?.includes('"getChat"')) {
         throw new Error(`Numero ${maskPhoneNumber(phoneNumber)} nao tem WhatsApp ativo ou nao foi encontrado.`);
       }
