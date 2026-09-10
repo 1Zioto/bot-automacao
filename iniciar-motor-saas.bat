@@ -17,6 +17,12 @@ if not exist ".env.motor.local" (
     exit /b 1
 )
 
+where pnpm >nul 2>nul
+if %errorlevel% neq 0 (
+    echo  pnpm nao encontrado. Instalando pnpm globalmente via npm...
+    call npm install -g pnpm
+)
+
 if not exist "node_modules" (
     echo  Instalando dependencias do projeto - pnpm install...
     call pnpm install
