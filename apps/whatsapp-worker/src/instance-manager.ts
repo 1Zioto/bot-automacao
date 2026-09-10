@@ -1,4 +1,4 @@
-﻿import { existsSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
 import { hostname } from 'node:os';
 import { join } from 'node:path';
 import whatsappWeb, { type Client as WhatsAppClient, type Message } from 'whatsapp-web.js';
@@ -38,14 +38,26 @@ const optOutPattern = /^(sair|parar|stop|cancelar|descadastrar|remover)\b/i;
 
 function resolveBrowserPath(): string | undefined {
   const configured = process.env.CHROME_PATH?.trim();
+  if (configured && existsSync(configured)) return configured;
+
   const candidates = [
-    configured,
     process.platform === 'win32' ? join(process.env.PROGRAMFILES ?? 'C:\\Program Files', 'Google', 'Chrome', 'Application', 'chrome.exe') : undefined,
     process.platform === 'win32' ? join(process.env['PROGRAMFILES(X86)'] ?? 'C:\\Program Files (x86)', 'Google', 'Chrome', 'Application', 'chrome.exe') : undefined,
     process.platform === 'win32' && process.env.LOCALAPPDATA ? join(process.env.LOCALAPPDATA, 'Google', 'Chrome', 'Application', 'chrome.exe') : undefined,
+    process.platform === 'win32' ? join(process.env['PROGRAMFILES(X86)'] ?? 'C:\\Program Files (x86)', 'Microsoft', 'Edge', 'Application', 'msedge.exe') : undefined,
     process.platform === 'win32' ? join(process.env.PROGRAMFILES ?? 'C:\\Program Files', 'Microsoft', 'Edge', 'Application', 'msedge.exe') : undefined,
+    process.platform === 'win32' && process.env.LOCALAPPDATA ? join(process.env.LOCALAPPDATA, 'Microsoft', 'Edge', 'Application', 'msedge.exe') : undefined,
+    '/usr/bin/google-chrome',
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
   ];
   return candidates.find((candidate): candidate is string => Boolean(candidate && existsSync(candidate)));
+}
+
+function resolveSessionClientId(row: InstanceRow): string {
+  const cleanId = row.id.replace(/[^a-zA-Z0-9]/g, '').slice(0, 10);
+  return `inst-${cleanId}`;
 }
 
 const browserPath = resolveBrowserPath();
@@ -65,9 +77,15 @@ export class InstanceManager {
   private isProcessingQueued = false;
 
   start(): void {
-    void this.scan();
-    this.scanTimer = setInterval(() => void this.scan(), 5_000);
-    this.outboundTimer = setInterval(() => void this.processQueuedDirect(), 4_000);
+    void this.scan().catch((error) => logger.error({ err: error }, 'Falha ao buscar instancias'));
+    this.scanTimer = setInterval(
+      () => void this.scan().catch((error) => logger.error({ err: error }, 'Falha ao buscar instancias')),
+      5_000,
+    );
+    this.outboundTimer = setInterval(
+      () => void this.processQueuedDirect().catch((error) => logger.error({ err: error }, 'Falha ao processar mensagens pendentes')),
+      4_000,
+    );
   }
 
   private async processQueuedDirect(): Promise<void> {
@@ -353,12 +371,28 @@ export class InstanceManager {
     }
   }
 
-  private async startInstance(row: InstanceRow): Promise<void> {
+  private async startInstance(row: InstanceRow, attempt = 1): Promise<void> {
     const lock = new DistributedLock(`wa:instance:${row.id}:owner`, 30_000);
     if (!(await lock.acquire())) return;
 
+    const sessionClientId = resolveSessionClientId(row);
+    const sessionDir = join(getEnvironment().WHATSAPP_SESSION_PATH, `session-${sessionClientId}`);
+
+    // Se a instância estiver sendo inicializada ou aguardando QR (não autenticada ainda),
+    // removemos dados residuais de inicializações abortadas para evitar que o WhatsApp Web
+    // tente restaurar uma sessão quebrada e cause erro de contexto destruído.
+    if ((row.status === 'INITIALIZING' || row.status === 'QR_PENDING' || attempt > 1) && existsSync(sessionDir)) {
+      try {
+        rmSync(sessionDir, { recursive: true, force: true });
+        logger.info({ instanceId: row.id, sessionDir }, 'Diretório de sessão temporário limpo para inicialização limpa');
+      } catch (err) {
+        logger.warn({ err, instanceId: row.id }, 'Não foi possível remover diretório de sessão');
+      }
+    }
+
     const client = new Client({
-      authStrategy: new LocalAuth({ clientId: row.client_id, dataPath: getEnvironment().WHATSAPP_SESSION_PATH }),
+      authStrategy: new LocalAuth({ clientId: sessionClientId, dataPath: getEnvironment().WHATSAPP_SESSION_PATH }),
+      authTimeoutMs: 60_000,
       puppeteer: {
         headless: getEnvironment().WHATSAPP_HEADLESS,
         executablePath: browserPath,
@@ -370,6 +404,7 @@ export class InstanceManager {
           '--no-first-run',
           '--no-zygote',
           '--disable-gpu',
+          '--disable-extensions',
         ],
       },
     });
@@ -441,7 +476,7 @@ export class InstanceManager {
     client.on('disconnected', (reason: string) => {
       void query(
         `UPDATE whatsapp_instances SET status = 'DISCONNECTED', connection_state = 'DISCONNECTED',
-                disconnected_at = now(), last_error_message = $3, updated_at = now()
+                 disconnected_at = now(), last_error_message = $3, updated_at = now()
          WHERE id = $1 AND tenant_id = $2`,
         [row.id, row.tenant_id, reason.slice(0, 500)],
       ).then(() => emitSafely(row.tenant_id, 'instance.disconnected', { instanceId: row.id, reason: reason.slice(0, 200) }));
@@ -454,7 +489,22 @@ export class InstanceManager {
        WHERE id = $1 AND tenant_id = $2`,
       [row.id, row.tenant_id, workerId],
     );
-    client.initialize().catch((error: Error) => void this.failInstance(row, 'INITIALIZE_FAILED', error.message));
+
+    client.initialize().catch(async (error: Error) => {
+      const isTransient = error.message.includes('Execution context was destroyed') ||
+                          error.message.includes('Session closed') ||
+                          error.message.includes('Protocol error');
+      if (isTransient && attempt < 3) {
+        logger.warn({ instanceId: row.id, attempt, err: error.message }, 'Falha transitória na navegação do Chrome. Limpando sessão e tentando novamente...');
+        await this.stopInstance(row.id, false);
+        try {
+          if (existsSync(sessionDir)) rmSync(sessionDir, { recursive: true, force: true });
+        } catch {}
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        return this.startInstance(row, attempt + 1);
+      }
+      await this.failInstance(row, 'INITIALIZE_FAILED', error.message);
+    });
   }
 
   private async handleIncoming(row: InstanceRow, message: Message): Promise<void> {
@@ -542,4 +592,3 @@ export class InstanceManager {
     await Promise.all([...this.instances.keys()].map((id) => this.stopInstance(id, false)));
   }
 }
-

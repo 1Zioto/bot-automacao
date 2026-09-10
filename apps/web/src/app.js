@@ -159,6 +159,14 @@ const pages = {
     });
     document.querySelectorAll('[data-qr]').forEach(b => b.onclick = async () => {
       if (qrTimer) clearInterval(qrTimer);
+      const initialPanel = $('#qr-panel');
+      if (initialPanel) {
+        initialPanel.innerHTML = `<div class="panel" style="text-align:center;max-width:480px;margin:20px auto"><h2>Conexao por QR Code</h2><div class="empty">Carregando QR Code...</div></div>`;
+        initialPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      b.disabled = true;
+      const originalLabel = b.textContent;
+      b.textContent = 'Carregando...';
       const loadQr = async () => {
         try {
           const q = await api(`/api/v1/instances/${b.dataset.qr}/qr`);
@@ -169,6 +177,31 @@ const pages = {
             if (qrTimer) clearInterval(qrTimer);
             return;
           }
+          if (q.status === 'ERROR') {
+            panel.innerHTML = `<div class="panel" style="text-align: center; max-width: 480px; margin: 20px auto; border-left: 4px solid #e53e3e; background: #fff8f8;">
+              <h2>Falha na Conexao</h2>
+              <p style="color: #c53030; margin: 10px 0 14px; font-weight: 500;">${esc(q.error || 'O motor encontrou uma falha ao inicializar o WhatsApp.')}</p>
+              <p class="muted" style="font-size: 13px; margin-bottom: 16px;">Verifique se o motor local (iniciar-motor-saas.bat) esta aberto no seu computador e tente novamente.</p>
+              <button class="primary" id="retry-init-btn" style="margin: 0 auto;">🔄 Tentar Novamente</button>
+            </div>`;
+            const retryBtn = $('#retry-init-btn');
+            if (retryBtn) {
+              retryBtn.onclick = async () => {
+                retryBtn.disabled = true;
+                retryBtn.textContent = 'Reiniciando...';
+                try {
+                  await api(`/api/v1/instances/${b.dataset.qr}/initialize`, { method: 'POST' });
+                  toast('Inicialização solicitada ao motor...');
+                  setTimeout(loadQr, 1000);
+                } catch (err) {
+                  toast(err.message, true);
+                  retryBtn.disabled = false;
+                  retryBtn.textContent = '🔄 Tentar Novamente';
+                }
+              };
+            }
+            return;
+          }
           panel.innerHTML = `<div class="panel" style="text-align: center; max-width: 480px; margin: 20px auto;">
             <h2>Conexao por QR Code</h2>
             <p class="muted" style="margin-bottom: 12px;">No seu celular, abra o WhatsApp &gt; Aparelhos conectados &gt; Conectar aparelho e aponte para o codigo:</p>
@@ -176,7 +209,12 @@ const pages = {
             <div style="margin-top: 12px;"><small class="muted">Atualizacao em tempo real ativa (a cada 3s).</small></div>
           </div>`;
         } catch (e) {
+          const panel = $('#qr-panel');
+          if (panel) panel.innerHTML = `<div class="panel"><h2>Falha ao carregar QR Code</h2><p class="muted">${esc(e.message)}</p></div>`;
           toast(e.message, true);
+        } finally {
+          b.disabled = false;
+          b.textContent = originalLabel;
         }
       };
       await loadQr();

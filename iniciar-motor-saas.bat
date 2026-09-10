@@ -22,17 +22,18 @@ if not exist "node_modules" (
     call npx pnpm install
 )
 
-if not exist "apps\whatsapp-worker\dist\index.js" (
-    echo  Compilando arquivos TypeScript do projeto...
+if not exist "packages\config\dist\index.js" (
+    echo  Compilando pacotes do projeto...
     call pnpm build
-    if not exist "apps\whatsapp-worker\dist\index.js" (
-        echo.
-        echo  [ERRO] Falha ao compilar o projeto.
-        echo  Execute 'pnpm build' manualmente para verificar os erros.
-        echo.
-        pause
-        exit /b 1
-    )
+) else (
+    echo  Compilando a versao atual do motor...
+    call pnpm --filter @autoflow/whatsapp-worker build
+)
+if errorlevel 1 (
+    echo.
+    echo  [ERRO] Falha ao compilar o motor WhatsApp.
+    pause
+    exit /b 1
 )
 
 echo  Conectando ao banco PostgreSQL e ao WhatsApp...
