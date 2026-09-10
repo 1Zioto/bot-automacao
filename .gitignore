@@ -23,6 +23,7 @@ anexos/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+/*.mjs
 
 # OS/editor files
 .DS_Store

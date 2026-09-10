@@ -1,29 +1,28 @@
 @echo off
-title Motor WhatsApp SaaS - Painel Novo
-color 0B
+title AutoFlow SaaS - Motor WhatsApp
+color 0A
 
 echo.
-echo  ============================================
-echo   MOTOR WHATSAPP SAAS - PAINEL NOVO
-echo  ============================================
+echo  ======================================================
+echo   AUTOFLOW SAAS - MOTOR WHATSAPP (douglaszioto@gmail.com)
+echo  ======================================================
 echo.
 
 cd /d "%~dp0"
 
 if not exist ".env.motor.local" (
-    echo  Configuracao local nao encontrada.
-    echo  Execute primeiro: pnpm runtime:sync
+    echo  Configuracao .env.motor.local nao encontrada.
     echo.
     pause
     exit /b 1
 )
 
-echo  Este motor atende o painel publicado na Vercel.
-echo  Mantenha esta janela aberta. Feche para parar o motor SaaS.
+echo  Conectando ao banco PostgreSQL (Neon)...
+echo  Aguarde a geracao do QR Code abaixo...
 echo.
 
-call pnpm motor:start
+node --env-file=.env.motor.local apps/whatsapp-worker/dist/index.js
 
 echo.
-echo  O motor SaaS foi encerrado.
+echo  O motor WhatsApp foi encerrado.
 pause

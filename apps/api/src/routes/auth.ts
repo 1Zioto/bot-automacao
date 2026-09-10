@@ -130,27 +130,42 @@ router.post('/register', async (req, res, next) => {
 router.post('/login', async (req, res, next) => {
   try {
     const input = loginWithTenantSchema.parse(req.body);
-    const rows = await query<SessionIdentity & { password_hash: string }>(
+    const rows = await query<SessionIdentity & { password_hash: string; tenant_slug: string; tenant_name: string }>(
       `SELECT u.id AS "userId", u.email, u.password_hash, t.id AS "tenantId",
+              t.slug AS "tenant_slug", t.name AS "tenant_name",
               m.id AS "membershipId", m.role
        FROM users u
        JOIN memberships m ON m.user_id = u.id AND m.status = 'ACTIVE'
        JOIN tenants t ON t.id = m.tenant_id AND t.status IN ('TRIAL', 'ACTIVE')
        WHERE u.email = $1 AND u.status = 'ACTIVE'
-         AND ($2::text IS NULL OR t.slug = $2)
-       ORDER BY m.created_at
-       LIMIT 2`,
-      [input.email.toLowerCase(), input.tenantSlug ?? null],
+       ORDER BY m.created_at`,
+      [input.email.toLowerCase()],
     );
     if (!rows[0] || !(await verifyPassword(rows[0].password_hash, input.password))) {
       throw new AppError('INVALID_CREDENTIALS', 'Email ou senha incorretos.', 401);
     }
-    if (!input.tenantSlug && rows.length > 1) {
+
+    let target = rows[0];
+    if (input.tenantSlug && input.tenantSlug.trim()) {
+      const search = input.tenantSlug.trim().toLowerCase();
+      const matched = rows.find((r) =>
+        r.tenant_slug.toLowerCase() === search ||
+        r.tenant_name.toLowerCase() === search ||
+        r.tenant_slug.toLowerCase().startsWith(search) ||
+        r.tenant_name.toLowerCase().startsWith(search)
+      );
+      if (matched) {
+        target = matched;
+      } else if (rows.length > 1) {
+        throw new AppError('INVALID_CREDENTIALS', 'Empresa nao encontrada para esta conta.', 401);
+      }
+    } else if (rows.length > 1) {
       throw new AppError('TENANT_REQUIRED', 'Informe a empresa para entrar.', 409);
     }
-    await query('UPDATE users SET last_login_at = now() WHERE id = $1', [rows[0].userId]);
-    const session = await issueSession(rows[0], req);
-    res.json({ ...session, user: { id: rows[0].userId, email: rows[0].email }, tenant: { id: rows[0].tenantId } });
+
+    await query('UPDATE users SET last_login_at = now() WHERE id = $1', [target.userId]);
+    const session = await issueSession(target, req);
+    res.json({ ...session, user: { id: target.userId, email: target.email }, tenant: { id: target.tenantId } });
   } catch (error) {
     next(error);
   }

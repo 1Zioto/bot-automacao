@@ -138,7 +138,12 @@ export function createOutboundProcessor(manager: InstanceManager) {
       }
       usageReserved = true;
 
-      const externalMessageId = await manager.sendText(recipient.instance_id, recipient.phone_number_snapshot, recipient.rendered_message);
+      const externalMessageId = await manager.sendText(
+        recipient.instance_id,
+        recipient.phone_number_snapshot,
+        recipient.rendered_message,
+        input.idempotencyKey,
+      );
       await getRedis().set(
         acceptedCacheKey,
         JSON.stringify({ externalMessageId, usageDate }),

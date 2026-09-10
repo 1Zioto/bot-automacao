@@ -31,7 +31,12 @@ export function createApp(): Express {
   app.set('trust proxy', 1);
   app.use(helmet());
   app.use(cors({ origin: env.CORS_ORIGINS.split(',').map((item) => item.trim()), credentials: true }));
-  app.use(express.json({ limit: '1mb' }));
+  app.use((req, res, next) => {
+    if (req.body !== undefined && req.body !== null) {
+      return next();
+    }
+    express.json({ limit: '1mb' })(req, res, next);
+  });
   app.use((req, res, next) => {
     const requestId = String(req.headers['x-request-id'] ?? randomUUID());
     (req as RequestContextRequest).requestId = requestId;

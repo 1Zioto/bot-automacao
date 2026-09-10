@@ -21,7 +21,8 @@
     "motor:start": "pnpm build && concurrently --kill-others-on-fail --names queue,whatsapp --prefix-colors cyan,magenta \"node --env-file=.env.motor.local apps/queue-worker/dist/index.js\" \"node scripts/supervise-whatsapp-worker.mjs\""
   },
   "dependencies": {
-    "@autoflow/api": "workspace:*"
+    "@autoflow/api": "workspace:*",
+    "tslib": "^2.8.1"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",

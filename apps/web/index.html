@@ -12,10 +12,14 @@
         <div class="brand-mark">A</div>
         <h1>AutoFlow</h1>
         <p>Entre para administrar sua operacao de WhatsApp.</p>
-        <label>E-mail<input name="email" type="email" autocomplete="email" required /></label>
-        <label>Senha<input name="password" type="password" autocomplete="current-password" required /></label>
-        <label>Empresa <small>(se sua conta tiver mais de uma)</small><input name="tenantSlug" /></label>
-        <button type="submit">Entrar</button>
+        <label>E-mail<input name="email" type="email" autocomplete="email" placeholder="seu@email.com" required /></label>
+        <label>Senha
+          <div style="position: relative; display: flex; align-items: center;">
+            <input id="login-password" name="password" type="password" autocomplete="current-password" placeholder="Sua senha" required style="padding-right: 40px;" />
+            <button type="button" id="toggle-password" title="Mostrar/Ocultar senha" style="position: absolute; right: 8px; background: transparent; border: none; padding: 4px; font-size: 16px; cursor: pointer; color: #53615c;">👁️</button>
+          </div>
+        </label>
+        <button type="submit" style="margin-top: 10px;">Entrar</button>
         <div class="auth-links"><button type="button" class="link" data-auth-view="register">Criar empresa</button><button type="button" class="link" data-auth-view="invite">Aceitar convite</button></div>
         <output id="login-message"></output>
       </form>

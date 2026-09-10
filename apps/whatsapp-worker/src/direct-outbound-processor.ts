@@ -100,7 +100,12 @@ export function createDirectOutboundProcessor(manager: InstanceManager) {
       usageReserved = true;
       await query("UPDATE messages SET status = 'SENDING', error_code = NULL WHERE id = $1 AND tenant_id = $2", [message.id, message.tenant_id]);
       const text = decryptText({ ciphertext: message.content_ciphertext, iv: message.content_iv, tag: message.content_tag });
-      const externalMessageId = await manager.sendText(message.instance_id, message.recipient_phone_snapshot, text);
+      const externalMessageId = await manager.sendText(
+        message.instance_id,
+        message.recipient_phone_snapshot,
+        text,
+        input.idempotencyKey,
+      );
       await getRedis().set(acceptedCacheKey, JSON.stringify({ externalMessageId, usageDate }), 'EX', 7 * 24 * 60 * 60);
       usageReserved = false;
       await persistDirectMessage(message, externalMessageId, usageDate);

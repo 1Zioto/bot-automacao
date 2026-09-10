@@ -11,6 +11,9 @@ importers:
       '@autoflow/api':
         specifier: workspace:*
         version: link:apps/api
+      tslib:
+        specifier: ^2.8.1
+        version: 2.8.1
     devDependencies:
       '@types/node':
         specifier: ^24.3.0
@@ -121,6 +124,9 @@ importers:
       bullmq:
         specifier: ^5.58.5
         version: 5.80.5
+      tslib:
+        specifier: ^2.8.1
+        version: 2.8.1
     devDependencies:
       '@types/node':
         specifier: ^24.3.0
@@ -167,6 +173,9 @@ importers:
       qrcode:
         specifier: ^1.5.4
         version: 1.5.4
+      tslib:
+        specifier: ^2.8.1
+        version: 2.8.1
       whatsapp-web.js:
         specifier: 1.34.7
         version: 1.34.7(typescript@5.9.3)

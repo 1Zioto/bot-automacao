@@ -4,15 +4,17 @@ import { getEnvironment } from '@autoflow/config';
 let pool: Pool | undefined;
 
 export function getPool(): Pool {
-  const environment = getEnvironment();
-  const maxConnections = process.env.VERCEL
-    ? Math.min(environment.DATABASE_POOL_MAX, 2)
-    : environment.DATABASE_POOL_MAX;
-  pool ??= new Pool({
-    connectionString: environment.DATABASE_URL,
-    max: maxConnections,
-    application_name: 'autoflow-saas',
-  });
+  if (!pool) {
+    const environment = getEnvironment();
+    const maxConnections = process.env.VERCEL
+      ? Math.min(environment.DATABASE_POOL_MAX, 2)
+      : environment.DATABASE_POOL_MAX;
+    pool = new Pool({
+      connectionString: environment.DATABASE_URL,
+      max: maxConnections,
+      application_name: 'autoflow-saas',
+    });
+  }
   return pool;
 }
 

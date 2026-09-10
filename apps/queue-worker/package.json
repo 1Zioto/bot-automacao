@@ -18,7 +18,8 @@
     "@autoflow/queue": "workspace:*",
     "@autoflow/security": "workspace:*",
     "@autoflow/shared": "workspace:*",
-    "bullmq": "^5.58.5"
+    "bullmq": "^5.58.5",
+    "tslib": "^2.8.1"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",

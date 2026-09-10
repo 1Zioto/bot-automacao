@@ -24,11 +24,15 @@ export async function emitWebhookEvent(tenantId: string, eventType: WebhookEvent
     [tenantId, eventId, eventType, JSON.stringify(data)],
   );
   if (deliveries.length > 0) {
-    await deliveryQueue.addBulk(deliveries.map((delivery) => ({
-      name: 'deliver',
-      data: { tenantId, deliveryId: delivery.id },
-      opts: { jobId: `webhook-${delivery.id}` },
-    })));
+    try {
+      await deliveryQueue.addBulk(deliveries.map((delivery) => ({
+        name: 'deliver',
+        data: { tenantId, deliveryId: delivery.id },
+        opts: { jobId: `webhook-${delivery.id}` },
+      })));
+    } catch {
+      // Redis opcional
+    }
   }
   return eventId;
 }

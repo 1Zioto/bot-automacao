@@ -20,6 +20,7 @@ process.on('uncaughtException', (err) => {
 
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode');
+const qrcodeTerminal = require('qrcode-terminal');
 const { Pool } = require('pg');
 const { proximaExecucao } = require('./_agenda');
 const { aplicarVariaveis } = require('./_texto');
@@ -278,7 +279,10 @@ function criarCliente(usuarioId, sessaoId) {
             const dataUrl = await qrcode.toDataURL(qr, { margin: 2, width: 320 });
             await setStatus(usuarioId, 'qr', { qr: dataUrl });
             const reg = clientes.get(usuarioId); if (reg) reg.status = 'qr';
-            console.log(`[sessao ${usuarioId}] QR gerado.`);
+            console.log(`\n========================================`);
+            console.log(`[sessao ${usuarioId}] ESCANEIE O QR CODE ABAIXO:`);
+            console.log(`========================================`);
+            qrcodeTerminal.generate(qr, { small: true });
         } catch (e) { console.error('Erro QR:', e.message); }
     });
 
@@ -372,12 +376,12 @@ async function sincronizarSessoes() {
             await destruirCliente(s.usuario_id, true);
             await setStatus(s.usuario_id, 'desconectado', { qr: null, numero_conectado: null }).catch(() => {});
         } else if (s.status === 'reconectar') {
-            // unico caso que gera QR: pedido explicito do usuario
+            // pedido explicito do usuario para reconectar
             await destruirCliente(s.usuario_id, true);
             await setStatus(s.usuario_id, 'conectando', { qr: null }).catch(() => {});
             criarCliente(s.usuario_id, s.id);
-        } else if (!reg && (s.status === 'erro' || s.status === 'pronto' || s.status === 'autenticado' || s.status === 'conectando')) {
-            // reconecta silenciosamente sessoes que ja estavam ativas (usa sessao salva; so gera QR se a sessao tiver expirado)
+        } else if (!reg && (s.status === 'erro' || s.status === 'pronto' || s.status === 'autenticado' || s.status === 'conectando' || s.status === 'qr')) {
+            // reconecta sessoes que ja estavam ativas ou aguardando QR
             if (s.status === 'erro') {
                 await setStatus(s.usuario_id, 'conectando', { qr: null }).catch(() => {});
             }

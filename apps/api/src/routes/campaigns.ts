@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { Router } from 'express';
 import { createCampaignSchema, startCampaignSchema } from '@autoflow/contracts';
 import { query, transaction } from '@autoflow/database';
@@ -15,6 +16,12 @@ router.use(authenticate);
 router.get('/', requirePermission('campaigns.read'), async (req, res, next) => {
   try {
     const auth = (req as AuthenticatedRequest).auth;
+    await query(
+      `UPDATE campaigns
+       SET status = 'RUNNING', started_at = COALESCE(started_at, now()), updated_at = now()
+       WHERE tenant_id = $1 AND status = 'SCHEDULED' AND (scheduled_at IS NULL OR scheduled_at <= now())`,
+      [auth.tenantId],
+    );
     const rows = await query(
       `SELECT c.id, c.name, c.status, c.scheduled_at, c.started_at, c.completed_at,
               c.total_recipients, c.queued_count, c.sent_count, c.delivered_count,
@@ -91,6 +98,65 @@ router.post('/:id/preview', requirePermission('campaigns.read'), async (req, res
   }
 });
 
+async function prepareCampaignDirectly(tenantId: string, campaignId: string): Promise<number> {
+  return await transaction(async (client) => {
+    const campaignResult = await client.query<{ id: string; instance_id: string; message_template: string; scheduled_at: Date | null; tenant_name: string }>(
+      `SELECT c.id, c.instance_id, c.message_template, c.scheduled_at, t.name AS tenant_name
+       FROM campaigns c JOIN tenants t ON t.id = c.tenant_id
+       WHERE c.id = $1 AND c.tenant_id = $2
+       FOR UPDATE`,
+      [campaignId, tenantId],
+    );
+    const campaign = campaignResult.rows[0];
+    if (!campaign) return 0;
+
+    const contacts = await client.query<{ id: string; name: string; phone_number: string; custom_fields: Record<string, unknown> }>(
+      `SELECT DISTINCT ct.id, ct.name, ct.phone_number, ct.custom_fields
+       FROM campaign_lists cl
+       JOIN contact_list_members lm
+         ON lm.tenant_id = cl.tenant_id AND lm.list_id = cl.list_id AND lm.removed_at IS NULL
+       JOIN contacts ct
+         ON ct.tenant_id = lm.tenant_id AND ct.id = lm.contact_id
+       WHERE cl.tenant_id = $1 AND cl.campaign_id = $2
+         AND ct.deleted_at IS NULL
+         AND ct.consent_status = 'GRANTED'
+         AND ct.opted_out_at IS NULL
+         AND ct.blocked_at IS NULL
+       ORDER BY ct.id`,
+      [tenantId, campaignId],
+    );
+
+    let count = 0;
+    for (const contact of contacts.rows) {
+      const idempotencyKey = createHash('sha256').update(`${campaign.id}:${contact.id}`).digest('hex');
+      const rendered = renderTemplate(campaign.message_template, {
+        ...contact.custom_fields,
+        nome: contact.name,
+        empresa: campaign.tenant_name,
+        numero: contact.phone_number,
+      });
+      await client.query(
+        `INSERT INTO campaign_recipients
+           (tenant_id, campaign_id, contact_id, phone_number_snapshot, rendered_message, status, idempotency_key)
+         VALUES ($1, $2, $3, $4, $5, 'QUEUED', $6)
+         ON CONFLICT (tenant_id, idempotency_key) DO UPDATE SET updated_at = now()`,
+        [tenantId, campaign.id, contact.id, contact.phone_number, rendered, idempotencyKey],
+      );
+      count++;
+    }
+
+    const isFuture = campaign.scheduled_at && campaign.scheduled_at.getTime() > Date.now();
+    await client.query(
+      `UPDATE campaigns
+       SET status = $1, total_recipients = $2, queued_count = $2, started_at = CASE WHEN $1 = 'RUNNING' THEN now() ELSE NULL END, updated_at = now()
+       WHERE id = $3 AND tenant_id = $4`,
+      [isFuture ? 'SCHEDULED' : 'RUNNING', count, campaign.id, tenantId],
+    );
+
+    return count;
+  });
+}
+
 router.post('/:id/start', requirePermission('campaigns.send'), async (req, res, next) => {
   try {
     startCampaignSchema.parse(req.body);
@@ -104,11 +170,23 @@ router.post('/:id/start', requirePermission('campaigns.send'), async (req, res, 
     );
     if (!rows[0]) throw new AppError('INVALID_CAMPAIGN_STATE', 'Campanha inexistente ou ja iniciada.', 409);
     const delay = rows[0].scheduled_at ? Math.max(rows[0].scheduled_at.getTime() - Date.now(), 0) : 0;
-    await preparationQueue.add(
-      'prepare',
-      { tenantId: auth.tenantId, campaignId: rows[0].id, requestedBy: auth.userId },
-      { jobId: `prepare-${rows[0].id}`, delay },
-    );
+    
+    let queuedOnRedis = false;
+    try {
+      await preparationQueue.add(
+        'prepare',
+        { tenantId: auth.tenantId, campaignId: rows[0].id, requestedBy: auth.userId },
+        { jobId: `prepare-${rows[0].id}`, delay },
+      );
+      queuedOnRedis = true;
+    } catch {
+      // Redis opcional
+    }
+
+    if (!queuedOnRedis) {
+      await prepareCampaignDirectly(auth.tenantId, rows[0].id);
+    }
+
     await recordAudit(req, { action: 'campaign.started', entityType: 'Campaign', entityId: rows[0].id });
     await emitEventSafely(auth.tenantId, 'campaign.started', { id: rows[0].id, delay });
     res.status(202).json({ id: rows[0].id, queued: true, delay });

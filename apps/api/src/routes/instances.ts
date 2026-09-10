@@ -104,11 +104,22 @@ router.get('/:id/status', requirePermission('instances.read'), async (req, res, 
 router.get('/:id/qr', requirePermission('instances.read'), async (req, res, next) => {
   try {
     const auth = (req as AuthenticatedRequest).auth;
-    const rows = await query('SELECT id, status FROM whatsapp_instances WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL', [req.params.id, auth.tenantId]);
+    const rows = await query<{ id: string; status: string; qr_code?: string | null }>(
+      'SELECT id, status, qr_code FROM whatsapp_instances WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL',
+      [req.params.id, auth.tenantId],
+    );
     if (!rows[0]) throw new AppError('INSTANCE_NOT_FOUND', 'Instancia nao encontrada.', 404);
-    const qr = await getRedis().get(`wa:instance:${req.params.id}:qr`);
+    let qr: string | null = null;
+    try {
+      qr = await getRedis().get(`wa:instance:${req.params.id}:qr`);
+    } catch {
+      // Redis opcional / fallback
+    }
+    if (!qr && rows[0].qr_code) {
+      qr = rows[0].qr_code;
+    }
     res.setHeader('Cache-Control', 'no-store');
-    res.json({ status: (rows[0] as { status: string }).status, qr });
+    res.json({ status: rows[0].status, qr });
   } catch (error) {
     next(error);
   }
@@ -119,13 +130,13 @@ router.post('/:id/initialize', requirePermission('instances.manage'), async (req
     const auth = (req as AuthenticatedRequest).auth;
     const rows = await query<{ id: string; status: string }>(
       `UPDATE whatsapp_instances
-       SET status = 'INITIALIZING', last_error_code = NULL, last_error_message = NULL, updated_at = now()
+       SET status = 'INITIALIZING', qr_code = NULL, connection_state = 'UNPAIRED',
+           last_error_code = NULL, last_error_message = NULL, updated_at = now()
        WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
-         AND status IN ('CREATED', 'DISCONNECTED', 'ERROR')
        RETURNING id, status`,
       [req.params.id, auth.tenantId],
     );
-    if (!rows[0]) throw new AppError('INVALID_INSTANCE_STATE', 'Instancia inexistente ou estado invalido.', 409);
+    if (!rows[0]) throw new AppError('INSTANCE_NOT_FOUND', 'Instancia nao encontrada.', 404);
     await recordAudit(req, { action: 'instance.initialize_requested', entityType: 'WhatsAppInstance', entityId: rows[0].id });
     res.status(202).json(rows[0]);
   } catch (error) {
