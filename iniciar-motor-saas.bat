@@ -17,6 +17,16 @@ if not exist ".env.motor.local" (
     exit /b 1
 )
 
+if not exist "node_modules" (
+    echo  Instalando dependencias do projeto (pnpm install)...
+    call pnpm install
+)
+
+if not exist "apps\whatsapp-worker\dist\index.js" (
+    echo  Compilando arquivos TypeScript do projeto (pnpm build)...
+    call pnpm build
+)
+
 echo  Conectando ao banco PostgreSQL (Neon)...
 echo  Aguarde a geracao do QR Code abaixo...
 echo.
