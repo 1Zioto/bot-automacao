@@ -40,23 +40,69 @@ router.post('/', authenticateApiKey('messages:write'), async (req, res, next) =>
         return existing.rows[0];
       }
 
-      const target = await client.query<{ id: string; phone_number: string }>(
-        `SELECT ct.id, ct.phone_number
-         FROM contacts ct
-         JOIN whatsapp_instances i ON i.tenant_id = ct.tenant_id
-         WHERE (($1::uuid IS NOT NULL AND ct.id = $1::uuid)
-             OR ($4::text IS NOT NULL AND ct.phone_number = $4))
-           AND ct.tenant_id = $2 AND i.id = $3
-           AND ct.deleted_at IS NULL AND ct.consent_status = 'GRANTED'
-           AND ct.opted_out_at IS NULL AND ct.blocked_at IS NULL
-           AND i.deleted_at IS NULL AND i.sending_enabled = true`,
-        [input.contactId ?? null, auth.tenantId, input.instanceId, input.phoneNumber ?? null],
+      const instance = await client.query<{ id: string; sending_enabled: boolean }>(
+        `SELECT id, sending_enabled
+         FROM whatsapp_instances
+         WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL`,
+        [input.instanceId, auth.tenantId],
       );
-      if (!target.rows[0]) {
-        throw new AppError('TARGET_NOT_ELIGIBLE', 'Contato sem consentimento ou instancia indisponivel.', 409);
+      if (!instance.rows[0]) {
+        throw new AppError('INSTANCE_NOT_FOUND', 'Instancia WhatsApp nao encontrada.', 404);
       }
-      if (target.rows.length !== 1) {
-        throw new AppError('AMBIGUOUS_CONTACT', 'Mais de um contato encontrado para este numero.', 409);
+      if (!instance.rows[0].sending_enabled) {
+        throw new AppError('INSTANCE_SENDING_DISABLED', 'Instancia WhatsApp desabilitada para envio no painel.', 409);
+      }
+
+      let targetContactId: string | null = null;
+      let targetPhoneNumber: string;
+
+      if (input.contactId) {
+        const ct = await client.query<{ id: string; phone_number: string; blocked_at: Date | null }>(
+          `SELECT id, phone_number, blocked_at
+           FROM contacts
+           WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL`,
+          [input.contactId, auth.tenantId],
+        );
+        if (!ct.rows[0]) {
+          throw new AppError('CONTACT_NOT_FOUND', 'Contato nao encontrado.', 404);
+        }
+        if (ct.rows[0].blocked_at) {
+          throw new AppError('CONTACT_BLOCKED', 'Contato esta bloqueado.', 409);
+        }
+        targetContactId = ct.rows[0].id;
+        targetPhoneNumber = ct.rows[0].phone_number;
+      } else if (input.phoneNumber) {
+        targetPhoneNumber = input.phoneNumber;
+        const ct = await client.query<{ id: string; blocked_at: Date | null; consent_status: string }>(
+          `SELECT id, blocked_at, consent_status
+           FROM contacts
+           WHERE tenant_id = $1 AND phone_number = $2 AND deleted_at IS NULL`,
+          [auth.tenantId, targetPhoneNumber],
+        );
+        if (ct.rows[0]) {
+          if (ct.rows[0].blocked_at) {
+            throw new AppError('CONTACT_BLOCKED', 'Contato esta bloqueado.', 409);
+          }
+          targetContactId = ct.rows[0].id;
+          if (ct.rows[0].consent_status !== 'GRANTED') {
+            await client.query(
+              `UPDATE contacts SET consent_status = 'GRANTED', consent_source = 'API', updated_at = now() WHERE id = $1`,
+              [targetContactId],
+            );
+          }
+        } else {
+          const created = await client.query<{ id: string }>(
+            `INSERT INTO contacts (tenant_id, name, phone_number, consent_status, consent_source)
+             VALUES ($1, $2, $2, 'GRANTED', 'API')
+             ON CONFLICT (tenant_id, phone_number) DO UPDATE
+             SET deleted_at = NULL, consent_status = 'GRANTED', updated_at = now()
+             RETURNING id`,
+            [auth.tenantId, targetPhoneNumber],
+          );
+          targetContactId = created.rows[0]!.id;
+        }
+      } else {
+        throw new AppError('TARGET_REQUIRED', 'Informe contactId ou phoneNumber.', 400);
       }
 
       const inserted = await client.query<{ id: string; status: string; instance_id: string }>(
@@ -65,7 +111,7 @@ router.post('/', authenticateApiKey('messages:write'), async (req, res, next) =>
             content_ciphertext, content_iv, content_tag, idempotency_key, recipient_phone_snapshot)
          VALUES ($1, $2, $3, 'OUTBOUND', 'TEXT', 'QUEUED', $4, $5, $6, $7, $8)
          RETURNING id, status, instance_id`,
-        [auth.tenantId, input.instanceId, target.rows[0].id, encrypted.ciphertext, encrypted.iv, encrypted.tag, idempotencyKey, target.rows[0].phone_number],
+        [auth.tenantId, input.instanceId, targetContactId, encrypted.ciphertext, encrypted.iv, encrypted.tag, idempotencyKey, targetPhoneNumber],
       );
       return inserted.rows[0]!;
     });

@@ -24,11 +24,19 @@ if not exist "node_modules" (
 
 if not exist "apps\whatsapp-worker\dist\index.js" (
     echo  Compilando arquivos TypeScript do projeto...
-    call npx pnpm build
+    call pnpm build
+    if not exist "apps\whatsapp-worker\dist\index.js" (
+        echo.
+        echo  [ERRO] Falha ao compilar o projeto.
+        echo  Execute 'pnpm build' manualmente para verificar os erros.
+        echo.
+        pause
+        exit /b 1
+    )
 )
 
-echo  Conectando ao banco PostgreSQL (Neon)...
-echo  Aguarde a geracao do QR Code abaixo...
+echo  Conectando ao banco PostgreSQL e ao WhatsApp...
+echo  (Se for o primeiro acesso, o QR Code aparecera abaixo)
 echo.
 
 node --env-file=.env.motor.local apps/whatsapp-worker/dist/index.js

@@ -14,25 +14,44 @@ app.use((e: any, _req: any, res: any, _next: any) => res.status(e.statusCode || 
 const input = { instanceId: '28a86bc2-7ed4-4001-82b5-42dd866ccbf8', phoneNumber: '5519999999999', text: 'Mensagem da viagem', idempotencyKey: 'test-message-001' };
 beforeEach(() => mocks.query.mockReset());
 describe('messages by phone', () => {
-  it('resolves only eligible tenant contacts and inserts their id', async () => {
-    mocks.query.mockResolvedValueOnce({ rows: [] }).mockResolvedValueOnce({ rows: [{ id: 'contact-resolved', phone_number: input.phoneNumber }] }).mockResolvedValueOnce({ rows: [{ id: 'message-id', status: 'QUEUED' }] });
+  it('resolves eligible instance and contact, sending without requiring prior consent', async () => {
+    mocks.query
+      .mockResolvedValueOnce({ rows: [] }) // idempotent check
+      .mockResolvedValueOnce({ rows: [{ id: input.instanceId, sending_enabled: true }] }) // instance check
+      .mockResolvedValueOnce({ rows: [{ id: 'contact-resolved', blocked_at: null, consent_status: 'GRANTED' }] }) // contact check
+      .mockResolvedValueOnce({ rows: [{ id: 'message-id', status: 'QUEUED' }] }); // insert message
     expect((await request(app).post('/messages').send(input)).status).toBe(202);
-    const [sql, params] = mocks.query.mock.calls[1]!;
-    expect(params).toEqual([null, 'tenant-test', input.instanceId, input.phoneNumber]);
-    expect(sql).toContain("consent_status = 'GRANTED'");
-    expect(sql).toContain('ct.blocked_at IS NULL');
-    expect(mocks.query.mock.calls[2]![1][2]).toBe('contact-resolved');
+    expect(mocks.query.mock.calls[3]![1][2]).toBe('contact-resolved');
   });
-  it('rejects missing/ineligible and ambiguous contacts without inserting', async () => {
-    for (const rows of [[], [{ id: 'a' }, { id: 'b' }]]) {
-      mocks.query.mockReset();
-      mocks.query.mockResolvedValueOnce({ rows: [] }).mockResolvedValueOnce({ rows });
-      expect((await request(app).post('/messages').send(input)).status).toBe(409);
-      expect(mocks.query).toHaveBeenCalledTimes(2);
-    }
+  it('auto-creates contact if not registered yet', async () => {
+    mocks.query
+      .mockResolvedValueOnce({ rows: [] }) // idempotent check
+      .mockResolvedValueOnce({ rows: [{ id: input.instanceId, sending_enabled: true }] }) // instance check
+      .mockResolvedValueOnce({ rows: [] }) // contact not found
+      .mockResolvedValueOnce({ rows: [{ id: 'auto-created-contact' }] }) // insert contact
+      .mockResolvedValueOnce({ rows: [{ id: 'message-id', status: 'QUEUED' }] }); // insert message
+    expect((await request(app).post('/messages').send(input)).status).toBe(202);
+    expect(mocks.query.mock.calls[4]![1][2]).toBe('auto-created-contact');
+  });
+  it('rejects if instance is missing or disabled', async () => {
+    mocks.query.mockReset();
+    mocks.query
+      .mockResolvedValueOnce({ rows: [] }) // idempotent
+      .mockResolvedValueOnce({ rows: [] }); // instance not found
+    expect((await request(app).post('/messages').send(input)).status).toBe(404);
+
+    mocks.query.mockReset();
+    mocks.query
+      .mockResolvedValueOnce({ rows: [] }) // idempotent
+      .mockResolvedValueOnce({ rows: [{ id: input.instanceId, sending_enabled: false }] }); // instance disabled
+    expect((await request(app).post('/messages').send(input)).status).toBe(409);
   });
   it('preserves contactId support', async () => {
-    mocks.query.mockResolvedValueOnce({ rows: [] }).mockResolvedValueOnce({ rows: [{ id: 'd5079484-74c3-4889-a5c7-29f78c6094ca', phone_number: input.phoneNumber }] }).mockResolvedValueOnce({ rows: [{ id: 'msg', status: 'QUEUED' }] });
+    mocks.query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ id: input.instanceId, sending_enabled: true }] })
+      .mockResolvedValueOnce({ rows: [{ id: 'd5079484-74c3-4889-a5c7-29f78c6094ca', phone_number: input.phoneNumber, blocked_at: null }] })
+      .mockResolvedValueOnce({ rows: [{ id: 'msg', status: 'QUEUED' }] });
     expect((await request(app).post('/messages').send({ ...input, phoneNumber: undefined, contactId: 'd5079484-74c3-4889-a5c7-29f78c6094ca' })).status).toBe(202);
   });
   it('reuses existing idempotent result', async () => {

@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+﻿import { existsSync } from 'node:fs';
 import { hostname } from 'node:os';
 import { join } from 'node:path';
 import whatsappWeb, { type Client as WhatsAppClient, type Message } from 'whatsapp-web.js';
@@ -264,7 +264,33 @@ export class InstanceManager {
     if (!managed?.ready) throw new Error('Instancia nao esta pronta neste worker.');
     const destination = `${normalizePhoneNumber(phoneNumber)}@c.us`;
     const sentAfter = Math.floor(Date.now() / 1000) - 2;
-    const sent = await managed.client.sendMessage(destination, content);
+
+    // Verificar se o numero esta registrado no WhatsApp antes de tentar enviar
+    // para evitar o erro interno "Cannot read properties of undefined (reading 'getChat')"
+    // que o whatsapp-web.js lanca quando o contato nao existe.
+    try {
+      const isRegistered = await managed.client.isRegisteredUser(destination);
+      if (!isRegistered) {
+        throw new Error(`Numero ${maskPhoneNumber(phoneNumber)} nao esta registrado no WhatsApp.`);
+      }
+    } catch (err: any) {
+      // Se isRegisteredUser falhar (sessao instavel), prosseguir e deixar o sendMessage tentar
+      if (err.message?.includes('nao esta registrado')) throw err;
+      logger.warn({ instanceId, err: err.message }, 'Nao foi possivel verificar registro do numero; tentando enviar mesmo assim');
+    }
+
+    let sent: any;
+    try {
+      sent = await managed.client.sendMessage(destination, content);
+    } catch (err: any) {
+      // O whatsapp-web.js lanca "Cannot read properties of undefined (reading 'getChat')"
+      // quando o numero nao tem conta ativa no WhatsApp. Transformamos em erro legivel.
+      if (err?.message?.includes("'getChat'") || err?.message?.includes('"getChat"')) {
+        throw new Error(`Numero ${maskPhoneNumber(phoneNumber)} nao tem WhatsApp ativo ou nao foi encontrado.`);
+      }
+      throw err;
+    }
+
     const directId = extractExternalMessageId(sent);
     if (directId) return directId;
 
@@ -512,3 +538,4 @@ export class InstanceManager {
     await Promise.all([...this.instances.keys()].map((id) => this.stopInstance(id, false)));
   }
 }
+

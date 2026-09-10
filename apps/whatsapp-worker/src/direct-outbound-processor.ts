@@ -57,9 +57,9 @@ export function createDirectOutboundProcessor(manager: InstanceManager) {
       const message = rows[0];
       if (!message) throw new AppError('MESSAGE_NOT_FOUND', 'Mensagem nao encontrada.', 404);
       if (['SENT', 'DELIVERED', 'READ'].includes(message.status)) return { skipped: 'ALREADY_SENT' };
-      if (message.consent_status !== 'GRANTED' || message.opted_out_at || message.blocked_at) {
-        await query("UPDATE messages SET status = 'SKIPPED', error_code = 'NO_CONSENT' WHERE id = $1 AND tenant_id = $2", [message.id, message.tenant_id]);
-        return { skipped: 'NO_CONSENT' };
+      if (message.blocked_at) {
+        await query("UPDATE messages SET status = 'SKIPPED', error_code = 'BLOCKED' WHERE id = $1 AND tenant_id = $2", [message.id, message.tenant_id]);
+        return { skipped: 'BLOCKED' };
       }
 
       const acceptedCacheKey = `wa:direct:accepted:${input.idempotencyKey}`;
