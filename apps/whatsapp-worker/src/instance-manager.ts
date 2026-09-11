@@ -386,18 +386,6 @@ export class InstanceManager {
     const sessionClientId = resolveSessionClientId(row);
     const sessionDir = join(getEnvironment().WHATSAPP_SESSION_PATH, `session-${sessionClientId}`);
 
-    // Se a instância estiver sendo inicializada ou aguardando QR (não autenticada ainda),
-    // removemos dados residuais de inicializações abortadas para evitar que o WhatsApp Web
-    // tente restaurar uma sessão quebrada e cause erro de contexto destruído.
-    if ((row.status === 'INITIALIZING' || row.status === 'QR_PENDING' || attempt > 1) && existsSync(sessionDir)) {
-      try {
-        rmSync(sessionDir, { recursive: true, force: true });
-        logger.info({ instanceId: row.id, sessionDir }, 'Diretório de sessão temporário limpo para inicialização limpa');
-      } catch (err) {
-        logger.warn({ err, instanceId: row.id }, 'Não foi possível remover diretório de sessão');
-      }
-    }
-
     const client = new Client({
       authStrategy: new LocalAuth({ clientId: sessionClientId, dataPath: getEnvironment().WHATSAPP_SESSION_PATH }),
       authTimeoutMs: 60_000,
