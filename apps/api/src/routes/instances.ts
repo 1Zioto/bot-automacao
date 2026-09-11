@@ -145,4 +145,53 @@ router.post('/:id/initialize', requirePermission('instances.manage'), async (req
   }
 });
 
+router.post('/:id/pause', requirePermission('instances.manage'), async (req, res, next) => {
+  try {
+    const auth = (req as AuthenticatedRequest).auth;
+    const rows = await query<{ id: string; status: string }>(
+      `UPDATE whatsapp_instances
+       SET status = 'PAUSED', connection_state = 'DISCONNECTED', qr_code = NULL,
+           worker_id = NULL, last_error_message = NULL, updated_at = now()
+       WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
+       RETURNING id, status`,
+      [req.params.id, auth.tenantId],
+    );
+    if (!rows[0]) throw new AppError('INSTANCE_NOT_FOUND', 'Instancia nao encontrada.', 404);
+    try {
+      await getRedis().del(`wa:instance:${req.params.id}:qr`);
+    } catch {}
+    await recordAudit(req, { action: 'instance.paused', entityType: 'WhatsAppInstance', entityId: rows[0].id });
+    await emitEventSafely(auth.tenantId, 'instance.disconnected', { instanceId: rows[0].id, reason: 'PAUSED' });
+    res.json(rows[0]);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete('/:id', requirePermission('instances.manage'), async (req, res, next) => {
+  try {
+    const auth = (req as AuthenticatedRequest).auth;
+    const rows = await query<{ id: string; status: string }>(
+      `UPDATE whatsapp_instances
+       SET status = 'DESTROYED', connection_state = 'DISCONNECTED', qr_code = NULL,
+           worker_id = NULL,
+           name = name || ' (excluida ' || to_char(now(), 'YYYY-MM-DD HH24:MI:SS') || ')',
+           deleted_at = now(), updated_at = now()
+       WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
+       RETURNING id, status`,
+      [req.params.id, auth.tenantId],
+    );
+    if (!rows[0]) throw new AppError('INSTANCE_NOT_FOUND', 'Instancia nao encontrada.', 404);
+    try {
+      await getRedis().del(`wa:instance:${req.params.id}:qr`);
+    } catch {}
+    await recordAudit(req, { action: 'instance.deleted', entityType: 'WhatsAppInstance', entityId: rows[0].id });
+    await emitEventSafely(auth.tenantId, 'instance.disconnected', { instanceId: rows[0].id, reason: 'DELETED' });
+    res.json({ success: true, id: rows[0].id });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export { router as instancesRouter };
+

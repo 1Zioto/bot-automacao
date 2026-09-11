@@ -27,7 +27,7 @@ if not exist "packages\config\dist\index.js" (
     call pnpm build
 ) else (
     echo  Compilando a versao atual do motor...
-    call pnpm --filter @autoflow/whatsapp-worker build
+    call pnpm --filter ...@autoflow/whatsapp-worker build
 )
 if errorlevel 1 (
     echo.

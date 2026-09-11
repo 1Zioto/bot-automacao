@@ -144,17 +144,52 @@ const pages = {
     const data = await api('/api/v1/instances');
     $('#content').innerHTML = `${head('Instancias', 'Cada numero possui sessao, limite e janela proprios.')}
       <div class="panel"><h2>Nova instancia</h2><form id="instance-form" class="form-grid"><label>Nome<input name="name" required placeholder="Atendimento principal"></label><div class="form-actions"><button class="primary">Criar instancia</button></div></form></div>
-      <div class="panel"><h2>Numeros conectados</h2>${rows(data.data, i => `<tr><td><strong>${esc(i.name)}</strong></td><td>${esc(i.phone_number || 'Aguardando conexao')}</td><td>${badge(i.status)}</td><td>${i.last_heartbeat_at ? new Date(i.last_heartbeat_at).toLocaleString('pt-BR') : '—'}</td><td class="actions"><button data-init="${i.id}">Inicializar</button><button class="primary" data-qr="${i.id}">Ver QR</button></td></tr>`, ['Nome', 'Numero', 'Estado', 'Ultimo sinal', 'Acoes'])}</div>
+      <div class="panel"><h2>Numeros conectados</h2>${rows(data.data, i => `<tr><td><strong>${esc(i.name)}</strong></td><td>${esc(i.phone_number || 'Aguardando conexao')}</td><td>${badge(i.status)}</td><td>${i.last_heartbeat_at ? new Date(i.last_heartbeat_at).toLocaleString('pt-BR') : '—'}</td><td class="actions">${i.status === 'PAUSED' ? `<button class="primary" data-init="${i.id}">Ativar</button>` : `<button data-init="${i.id}">${i.status === 'READY' ? 'Reiniciar' : 'Inicializar'}</button><button class="warning" data-pause="${i.id}">Desativar</button>`}${i.status !== 'PAUSED' ? `<button class="secondary" data-qr="${i.id}">Ver QR</button>` : ''}<button class="danger" data-delete="${i.id}">Excluir</button></td></tr>`, ['Nome', 'Numero', 'Estado', 'Ultimo sinal', 'Acoes'])}</div>
       <div id="qr-panel"></div>`;
     $('#instance-form').addEventListener('submit', submitJson('/api/v1/instances', () => navigate('instances')));
     document.querySelectorAll('[data-init]').forEach(b => b.onclick = async () => {
       try {
+        b.disabled = true;
         await api(`/api/v1/instances/${b.dataset.init}/initialize`, { method: 'POST' });
         toast('Inicializacao solicitada. Gerando QR Code...');
+        await navigate('instances');
         const qrBtn = document.querySelector(`[data-qr="${b.dataset.init}"]`);
         if (qrBtn) qrBtn.click();
       } catch (err) {
         toast(err.message, true);
+        b.disabled = false;
+      }
+    });
+    document.querySelectorAll('[data-pause]').forEach(b => b.onclick = async () => {
+      if (!confirm('Deseja realmente desativar esta instancia? O motor fechara a conexao do WhatsApp.')) return;
+      try {
+        b.disabled = true;
+        await api(`/api/v1/instances/${b.dataset.pause}/pause`, { method: 'POST' });
+        toast('Instancia desativada com sucesso.');
+        if (qrTimer) clearInterval(qrTimer);
+        const qrPanel = $('#qr-panel');
+        if (qrPanel) qrPanel.innerHTML = '';
+        await navigate('instances');
+      } catch (err) {
+        toast(err.message, true);
+        b.disabled = false;
+      }
+    });
+    document.querySelectorAll('[data-delete]').forEach(b => b.onclick = async () => {
+      const inst = data.data.find(x => x.id === b.dataset.delete);
+      const name = inst ? inst.name : 'esta instancia';
+      if (!confirm(`Deseja realmente excluir a instancia "${name}"?\nEsta acao nao pode ser desfeita e encerrara a conexao.`)) return;
+      try {
+        b.disabled = true;
+        await api(`/api/v1/instances/${b.dataset.delete}`, { method: 'DELETE' });
+        toast('Instancia excluida com sucesso.');
+        if (qrTimer) clearInterval(qrTimer);
+        const qrPanel = $('#qr-panel');
+        if (qrPanel) qrPanel.innerHTML = '';
+        await navigate('instances');
+      } catch (err) {
+        toast(err.message, true);
+        b.disabled = false;
       }
     });
     document.querySelectorAll('[data-qr]').forEach(b => b.onclick = async () => {

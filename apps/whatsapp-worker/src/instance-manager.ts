@@ -362,10 +362,18 @@ export class InstanceManager {
          'READY', 'PAUSED', 'DESTROYED'
        )`,
     );
+
+    // Encerra instâncias locais que foram pausadas, destruídas ou excluídas do banco
+    for (const id of this.instances.keys()) {
+      const activeRow = rows.find((r) => r.id === id);
+      if (!activeRow || activeRow.status === 'PAUSED' || activeRow.status === 'DESTROYED') {
+        await this.stopInstance(id, !activeRow || activeRow.status === 'DESTROYED');
+      }
+    }
+
+    // Inicia instâncias que precisam rodar e ainda não estão no worker
     for (const row of rows) {
-      if (row.status === 'PAUSED' || row.status === 'DESTROYED') {
-        await this.stopInstance(row.id, row.status === 'DESTROYED');
-      } else if (!this.instances.has(row.id)) {
+      if (row.status !== 'PAUSED' && row.status !== 'DESTROYED' && !this.instances.has(row.id)) {
         await this.startInstance(row);
       }
     }
@@ -416,7 +424,9 @@ export class InstanceManager {
         `UPDATE whatsapp_instances SET last_heartbeat_at = now(), worker_id = $3, updated_at = now()
          WHERE id = $1 AND tenant_id = $2`,
         [row.id, row.tenant_id, workerId],
-      );
+      ).catch((err) => {
+        logger.debug({ err: err?.message, instanceId: row.id }, 'Falha transitória de heartbeat no banco');
+      });
     }, 15_000);
     const managed: ManagedInstance = { row, client, lock, renewTimer, heartbeatTimer, ready: false };
     this.instances.set(row.id, managed);
@@ -449,7 +459,9 @@ export class InstanceManager {
         `UPDATE whatsapp_instances SET status = 'AUTHENTICATING', updated_at = now()
          WHERE id = $1 AND tenant_id = $2`,
         [row.id, row.tenant_id],
-      );
+      ).catch((err) => {
+        logger.warn({ err: err?.message, instanceId: row.id }, 'Falha ao registrar autenticação no banco');
+      });
     });
     client.on('ready', async () => {
       managed.ready = true;
@@ -479,10 +491,14 @@ export class InstanceManager {
                  disconnected_at = now(), last_error_message = $3, updated_at = now()
          WHERE id = $1 AND tenant_id = $2`,
         [row.id, row.tenant_id, reason.slice(0, 500)],
-      ).then(() => emitSafely(row.tenant_id, 'instance.disconnected', { instanceId: row.id, reason: reason.slice(0, 200) }));
+      ).catch((err) => {
+        logger.warn({ err: err?.message, instanceId: row.id }, 'Falha ao atualizar desconexão no banco');
+      }).then(() => emitSafely(row.tenant_id, 'instance.disconnected', { instanceId: row.id, reason: reason.slice(0, 200) }));
       void this.stopInstance(row.id, false);
     });
-    client.on('message', (message: Message) => void this.handleIncoming(row, message));
+    client.on('message', (message: Message) => void this.handleIncoming(row, message).catch((err) => {
+      logger.error({ err, instanceId: row.id }, 'Falha ao processar mensagem recebida');
+    }));
 
     await query(
       `UPDATE whatsapp_instances SET status = 'INITIALIZING', worker_id = $3, last_heartbeat_at = now(), updated_at = now()
@@ -589,6 +605,7 @@ export class InstanceManager {
 
   async shutdown(): Promise<void> {
     if (this.scanTimer) clearInterval(this.scanTimer);
+    if (this.outboundTimer) clearInterval(this.outboundTimer);
     await Promise.all([...this.instances.keys()].map((id) => this.stopInstance(id, false)));
   }
 }

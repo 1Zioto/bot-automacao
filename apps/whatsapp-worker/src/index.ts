@@ -60,8 +60,23 @@ async function initBullMQWorkers(): Promise<void> {
 
 void initBullMQWorkers();
 
-process.on('unhandledRejection', () => {});
-process.on('uncaughtException', () => {});
+process.on('unhandledRejection', (error) => {
+  logger.warn({ err: error }, 'Promessa rejeitada no worker (tratada)');
+});
+process.on('uncaughtException', (error: any) => {
+  const msg = typeof error?.message === 'string' ? error.message : '';
+  const isConnErr =
+    msg.includes('Connection terminated') ||
+    msg.includes('connection closed') ||
+    error?.code === 'ECONNRESET';
+
+  if (isConnErr) {
+    logger.warn({ err: error }, 'Conexão temporariamente interrompida (o pool reconectará automaticamente)');
+    return;
+  }
+  logger.fatal({ err: error }, 'Erro inesperado no worker');
+  process.exitCode = 1;
+});
 
 logger.info('WhatsApp worker iniciado');
 

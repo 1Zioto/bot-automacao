@@ -1,0 +1,15 @@
+AUTOFLOW / BOT WHATSAPP - INSTALACAO EM OUTRA MAQUINA
+
+1. Instale o Node.js 24 ou uma versao entre 20 e 24.
+2. Instale o Google Chrome.
+3. Extraia todo o arquivo ZIP em uma pasta local.
+4. Execute iniciar-motor-saas.bat.
+5. Aguarde a instalacao e a compilacao terminarem.
+6. Abra https://vercel-panel-delta.vercel.app, entre em Instancias e clique em Inicializar.
+7. Clique em Ver QR e conecte pelo WhatsApp em Aparelhos conectados.
+
+O arquivo .env.motor.local acompanha o pacote e contem a configuracao privada do motor.
+Guarde o ZIP em local seguro e nao envie para terceiros.
+
+As pastas node_modules, .git, logs, caches e sessoes antigas nao acompanham o pacote.
+Elas sao recriadas automaticamente ou nao sao necessarias na nova maquina.
